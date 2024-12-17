@@ -1,8 +1,11 @@
 [package]
 name = "showcase"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = [ "Peter Hammond <https://github.com/PeterMHammond>" ]
+description = "A showcase of Cloudflare Workers capabilities using Rust, demonstrating routing and API functionality"
+repository = "https://github.com/PeterMHammond/Cloudflare-Showcase"
+license = "Unlicense"
 
 [package.metadata.release]
 release = false
@@ -18,3 +21,4 @@ crate-type = ["cdylib"]
 worker = { version="0.5.0" }
 worker-macros = { version="0.5.0" }
 console_error_panic_hook = { version = "0.1.1" }
+askama = "0.12.1"
