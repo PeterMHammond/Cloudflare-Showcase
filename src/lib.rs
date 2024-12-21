@@ -2,15 +2,15 @@ use worker::*;
 use routes::{
     about::handler as about,
     index::handler as index,
-    websocket_do::handler as websocket_do,
-    websocket_do::test::handler as websocket_test,
+    websocket::handler as websocket_do,
+    websocket::websocket::handler as websocket,
 };
 
 mod template;
 mod routes {
     pub mod about;
     pub mod index;
-    pub mod websocket_do;
+    pub mod websocket;
 }
 
 #[event(fetch)]
@@ -23,7 +23,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/", index)
         .get_async("/about", about)
         .get_async("/websocket_do", websocket_do)
-        .get_async("/websocket", websocket_test)
+        .get_async("/websocket", websocket)
         .run(req, env)
         .await?;
 

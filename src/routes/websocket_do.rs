@@ -5,19 +5,19 @@ use std::time::Duration;
 use async_std::task;
 use std::sync::{Arc, Mutex};
 
-const WEBSOCKET_TEST_HTML: &str = r#"
+const WEBSOCKET_HTML: &str = r#"
 <!DOCTYPE html>
 <html lang="en" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-time Clock</title>
+    <title>Websocket Demo</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="h-full min-h-screen bg-[#e8e6de] p-4">
     <div class="max-w-4xl mx-auto space-y-4">
         <div class="bg-white rounded-lg shadow-sm p-8">
-            <h1 class="text-2xl font-bold text-gray-800 mb-6">Real-time Clock</h1>
+            <h1 class="text-2xl font-bold text-gray-800 mb-6">Server Clock Events</h1>
             <div class="flex flex-col items-center space-y-4">
                 <div id="clock" class="text-4xl font-mono font-bold text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner">--:--:--</div>
                 <div id="status" class="text-sm font-medium rounded-full px-4 py-1"></div>
@@ -302,8 +302,8 @@ pub async fn handler(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     stub.fetch_with_request(req).await
 }
 
-// Test page handler
-pub mod test {
+// WebSocket page handler
+pub mod websocket {
     use super::*;
 
     pub async fn handler(req: Request, ctx: RouteContext<()>) -> Result<Response> {
@@ -312,7 +312,7 @@ pub mod test {
 
         let response_body = format!(
             "{}",
-            WEBSOCKET_TEST_HTML
+            WEBSOCKET_HTML
         );
 
         Ok(Response::ok(response_body)?.with_headers(headers))
