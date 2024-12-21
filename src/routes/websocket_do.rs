@@ -31,77 +31,136 @@ const WEBSOCKET_TEST_HTML: &str = r#"
         const messagesDiv = document.getElementById('messages');
         const statusDiv = document.getElementById('status');
         let ws = null;
+        let clientId = localStorage.getItem('websocket_client_id');
+        let reconnectTimer = null;
+        let isReconnecting = false;
         
-        function connect() {
-            // Close existing connection if any
+        function cleanupConnection() {
             if (ws) {
-                ws.close();
+                try {
+                    ws.close();
+                } catch (e) {
+                    console.log('Error closing WebSocket:', e);
+                }
                 ws = null;
             }
+            if (reconnectTimer) {
+                clearTimeout(reconnectTimer);
+                reconnectTimer = null;
+            }
+        }
 
-            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${window.location.host}/websocket_do`);
-            
-            ws.onopen = () => {
-                statusDiv.textContent = 'Connected';
-                statusDiv.style.color = 'green';
-                console.log('WebSocket connected');
-            };
-            
-            ws.onmessage = (event) => {
-                console.log('Received message:', event.data);
-                const data = JSON.parse(event.data);
-                const time = new Date(parseInt(data.timestamp)).toLocaleTimeString();
-                const messageDiv = document.createElement('div');
-                messageDiv.innerHTML = `<span class="timestamp">${time}</span>`;
-                messagesDiv.appendChild(messageDiv);
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            };
-            
-            ws.onclose = () => {
-                statusDiv.textContent = 'Disconnected - Reconnecting...';
-                statusDiv.style.color = 'red';
-                console.log('WebSocket disconnected');
-                ws = null;
-                setTimeout(connect, 1000);
-            };
+        function scheduleReconnect(delay = 1000) {
+            if (!isReconnecting && !reconnectTimer) {
+                isReconnecting = true;
+                reconnectTimer = setTimeout(() => {
+                    reconnectTimer = null;
+                    isReconnecting = false;
+                    if (!ws) connect();
+                }, delay);
+            }
+        }
+        
+        function connect() {
+            // Clean up any existing connection
+            cleanupConnection();
 
-            ws.onerror = (error) => {
-                console.error('WebSocket error:', error);
-                ws = null;
-            };
+            try {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const url = `${protocol}//${window.location.host}/websocket_do${clientId ? '?id=' + clientId : ''}`;
+                ws = new WebSocket(url);
+                
+                ws.onopen = () => {
+                    statusDiv.textContent = 'Connected';
+                    statusDiv.style.color = 'green';
+                    console.log('WebSocket connected');
+                    isReconnecting = false;
+                };
+                
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('Received message:', data);
+                        
+                        if (data.type === 'client_id') {
+                            clientId = data.id;
+                            localStorage.setItem('websocket_client_id', clientId);
+                            return;
+                        }
+
+                        if (data.type === 'ping') {
+                            console.log('Ping received from server');
+                            return;
+                        }
+                        
+                        if (data.type === 'timestamp') {
+                            const time = new Date(parseInt(data.timestamp)).toLocaleTimeString();
+                            const messageDiv = document.createElement('div');
+                            messageDiv.innerHTML = `<span class="timestamp">${time}</span>`;
+                            messagesDiv.appendChild(messageDiv);
+                            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                        }
+                    } catch (error) {
+                        console.error('Error processing message:', error, event.data);
+                    }
+                };
+                
+                ws.onclose = (event) => {
+                    console.log('WebSocket closed:', event.code, event.reason);
+                    statusDiv.textContent = 'Disconnected - Reconnecting...';
+                    statusDiv.style.color = 'red';
+                    ws = null;
+
+                    // Schedule reconnect unless it's a normal closure
+                    if (event.code !== 1000) {
+                        scheduleReconnect();
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.log('WebSocket error:', error);
+                    // The connection will be closed after this error
+                    // onclose will handle the reconnection
+                };
+            } catch (error) {
+                console.error('Error creating WebSocket:', error);
+                scheduleReconnect();
+            }
         }
         
         // Handle page visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // Page is hidden, close the connection
-                if (ws) {
-                    ws.close();
-                    ws = null;
-                }
+                // Page is hidden, close the connection cleanly
+                cleanupConnection();
             } else {
-                // Page is visible again, reconnect
-                connect();
+                // Page is visible again, reconnect if not connected
+                if (!ws && !isReconnecting) {
+                    connect();
+                }
             }
         });
 
         // Handle page unload
         window.addEventListener('beforeunload', () => {
-            if (ws) {
-                ws.close();
-                ws = null;
-            }
+            cleanupConnection();
         });
         
+        // Initial connection
         connect();
     </script>
 </body>
 </html>
 "#;
 
+#[derive(Clone)]
+struct Client {
+    id: String,
+    socket: WebSocket,
+}
+
 struct SharedState {
-    clients: Vec<WebSocket>,
+    clients: Vec<Client>,
     clock_started: bool,
 }
 
@@ -140,17 +199,44 @@ impl DurableObject for WebsocketDO {
                     // Accept the WebSocket connection
                     server.accept()?;
 
+                    // Get or generate client ID
+                    let client_id = url.query_pairs()
+                        .find(|(key, _)| key == "id")
+                        .map(|(_, value)| value.to_string())
+                        .unwrap_or_else(|| format!("client-{}", Date::now().as_millis()));
+
+                    // Send the client ID back to the client
+                    let id_message = json!({
+                        "type": "client_id",
+                        "id": client_id
+                    }).to_string();
+                    server.send_with_str(&id_message)?;
+
                     // Add the client and check if we need to start the clock
                     let start_clock = {
                         let mut shared = self.shared.lock().unwrap();
-                        // Clean up any closed connections
-                        shared.clients.retain(|client| {
-                            match client.send_with_str("ping") {
+                        
+                        // Remove any existing connection with the same ID
+                        shared.clients.retain(|c| {
+                            if c.id == client_id {
+                                return false;
+                            }
+                            // Test connection with ping message
+                            match c.socket.send_with_str(&json!({"type": "ping"}).to_string()) {
                                 Ok(_) => true,
-                                Err(_) => false
+                                Err(_) => {
+                                    console_log!("Removing disconnected client {}: ping failed", c.id);
+                                    false
+                                }
                             }
                         });
-                        shared.clients.push(server.clone());
+                        
+                        // Add the new client
+                        shared.clients.push(Client {
+                            id: client_id,
+                            socket: server.clone(),
+                        });
+
                         !shared.clock_started
                     };
 
@@ -162,15 +248,25 @@ impl DurableObject for WebsocketDO {
                         wasm_bindgen_futures::spawn_local(async move {
                             loop {
                                 let timestamp = Date::now().as_millis();
-                                let message = json!({ "timestamp": timestamp }).to_string();
+                                let message = json!({
+                                    "type": "timestamp",
+                                    "timestamp": timestamp
+                                }).to_string();
                                 
                                 let mut shared = shared.lock().unwrap();
                                 shared.clients.retain(|client| {
-                                    match client.send_with_str(&message) {
+                                    // First try a ping message
+                                    if let Err(_) = client.socket.send_with_str(&json!({"type": "ping"}).to_string()) {
+                                        console_log!("Removing disconnected client {}: ping failed", client.id);
+                                        return false;
+                                    }
+                                    
+                                    // Then try to send the message
+                                    match client.socket.send_with_str(&message) {
                                         Ok(_) => true,
                                         Err(e) => {
-                                            console_log!("Error sending message: {:?}", e);
-                                            false // Remove failed client
+                                            console_log!("Removing disconnected client {}: send failed - {:?}", client.id, e);
+                                            false
                                         }
                                     }
                                 });
