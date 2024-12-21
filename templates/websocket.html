@@ -2,20 +2,28 @@
 
 {% block content %}
 <section class="h-full p-8 space-y-4">
-    <article class="bg-white rounded-lg shadow-sm p-8">
-        <header class="text-2xl font-bold text-gray-800 mb-6">Worker Clock Events</header>
-        <div class="flex items-center justify-between">
-            <time id="clock" class="text-4xl font-mono font-bold text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner">--:--:--</time>
-            <aside id="status" class="text-sm font-medium rounded-full px-4 py-1"></aside>
-        </div>
-    </article>
-
-    <article class="bg-white rounded-lg shadow-sm p-8">
-        <header class="text-lg font-semibold text-gray-800 mb-4">Debug Log</header>
-        <section id="messages" class="font-mono text-sm bg-gray-50 rounded-lg p-4 h-[200px] overflow-y-auto space-y-1">
+    <article class="bg-white rounded-lg shadow-sm p-8 space-y-4">
+        <header class="text-2xl font-bold text-gray-800">Worker Clock Events</header>
+        <aside id="status" class="inline-block text-sm font-medium rounded-full px-4 py-1 text-green-600 bg-green-100">
+            Connected
+        </aside>
+        <section class="flex items-start space-x-4">
+            <time id="clock" class="inline-block text-4xl font-mono font-bold text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner">
+                --:--:--
+            </time>
+            <section id="additional-info" class="inline-block bg-gray-50 px-6 py-4 rounded-lg shadow-inner text-gray-800">
+                <header class="font-semibold text-sm">Additional Info</header>
+                <p class="text-xs">More details about the clock here...</p>
+            </section>
         </section>
     </article>
-
+    
+    <article class="bg-white rounded-lg shadow-sm p-8">
+        <header class="text-lg font-semibold text-gray-800 mb-4">Debug Log</header>
+        <section id="messages" class="font-mono text-sm bg-black text-green-500 rounded-lg p-4 h-[200px] overflow-y-auto">
+            <!-- Logs will be dynamically appended here -->
+        </section>
+    </article>
     <script>
         const messagesDiv = document.getElementById('messages');
         const statusDiv = document.getElementById('status');
@@ -61,47 +69,54 @@
                 
                 ws.onopen = () => {
                     statusDiv.textContent = 'Connected';
-                    statusDiv.className = 'text-sm font-medium rounded-full px-4 py-1 bg-green-100 text-green-800';
+                    statusDiv.className = 'inline-block text-sm font-medium rounded-full px-4 py-1 bg-green-100 text-green-800';
                     console.log('WebSocket connected');
                     isReconnecting = false;
                 };
                 
                 ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        console.log('Received message:', data);
-                        
-                        if (data.type === 'client_id') {
-                            clientId = data.id;
-                            localStorage.setItem('websocket_client_id', clientId);
-                            return;
-                        }
+    try {
+        const data = JSON.parse(event.data);
+        console.log('Received message:', data);
+        
+        if (data.type === 'client_id') {
+            clientId = data.id;
+            localStorage.setItem('websocket_client_id', clientId);
+            return;
+        }
 
-                        if (data.type === 'ping') {
-                            console.log('Ping received from server');
-                            return;
-                        }
-                        
-                        if (data.type === 'timestamp') {
-                            const date = new Date(parseInt(data.timestamp));
-                            const time = date.toLocaleTimeString();
-                            clockDiv.textContent = time;
-                            
-                            const messageDiv = document.createElement('div');
-                            messageDiv.className = 'text-gray-600';
-                            messageDiv.textContent = `${time} - Timestamp received`;
-                            messagesDiv.appendChild(messageDiv);
-                            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                        }
-                    } catch (error) {
-                        console.error('Error processing message:', error, event.data);
-                    }
-                };
+        if (data.type === 'ping') {
+            console.log('Ping received from server');
+            return;
+        }
+        
+        if (data.type === 'timestamp') {
+            const date = new Date(parseInt(data.timestamp));
+            const time = date.toLocaleTimeString();
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'text-green-500';
+            messageDiv.textContent = `[${time}] Message received: ${JSON.stringify(data)}`;
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            clockDiv.textContent = time;
+        }
+    } catch (error) {
+        console.error('Error processing message:', error, event.data);
+
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'text-red-500';
+        errorDiv.textContent = 'Error processing message: ' + event.data;
+
+        messagesDiv.appendChild(errorDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+};
+
                 
                 ws.onclose = (event) => {
                     console.log('WebSocket closed:', event.code, event.reason);
                     statusDiv.textContent = 'Disconnected - Reconnecting...';
-                    statusDiv.className = 'text-sm font-medium rounded-full px-4 py-1 bg-red-100 text-red-800';
+                    statusDiv.className = 'inline-block text-sm font-medium rounded-full px-4 py-1 bg-red-100 text-red-800';
                     ws = null;
 
                     if (event.code !== 1000) {
