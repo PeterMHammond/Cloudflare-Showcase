@@ -7,29 +7,34 @@ use std::sync::{Arc, Mutex};
 
 const WEBSOCKET_TEST_HTML: &str = r#"
 <!DOCTYPE html>
-<html>
+<html lang="en" class="h-full">
 <head>
-    <title>WebSocket Test</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        #messages { 
-            border: 1px solid #ccc; 
-            padding: 20px; 
-            height: 300px; 
-            overflow-y: auto;
-            margin-bottom: 20px;
-        }
-        .timestamp { color: #666; }
-    </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-time Clock</title>
+    <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-    <h1>WebSocket Test</h1>
-    <div id="messages"></div>
-    <div id="status">Disconnected</div>
+<body class="h-full min-h-screen bg-[#e8e6de] p-4">
+    <div class="max-w-4xl mx-auto space-y-4">
+        <div class="bg-white rounded-lg shadow-sm p-8">
+            <h1 class="text-2xl font-bold text-gray-800 mb-6">Real-time Clock</h1>
+            <div class="flex flex-col items-center space-y-4">
+                <div id="clock" class="text-4xl font-mono font-bold text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner">--:--:--</div>
+                <div id="status" class="text-sm font-medium rounded-full px-4 py-1"></div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow-sm p-8">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4">Debug Log</h2>
+            <div id="messages" class="font-mono text-sm bg-gray-50 rounded-lg p-4 h-[200px] overflow-y-auto space-y-1">
+            </div>
+        </div>
+    </div>
 
     <script>
         const messagesDiv = document.getElementById('messages');
         const statusDiv = document.getElementById('status');
+        const clockDiv = document.getElementById('clock');
         let ws = null;
         let clientId = localStorage.getItem('websocket_client_id');
         let reconnectTimer = null;
@@ -62,7 +67,6 @@ const WEBSOCKET_TEST_HTML: &str = r#"
         }
         
         function connect() {
-            // Clean up any existing connection
             cleanupConnection();
 
             try {
@@ -72,7 +76,7 @@ const WEBSOCKET_TEST_HTML: &str = r#"
                 
                 ws.onopen = () => {
                     statusDiv.textContent = 'Connected';
-                    statusDiv.style.color = 'green';
+                    statusDiv.className = 'text-sm font-medium rounded-full px-4 py-1 bg-green-100 text-green-800';
                     console.log('WebSocket connected');
                     isReconnecting = false;
                 };
@@ -94,9 +98,13 @@ const WEBSOCKET_TEST_HTML: &str = r#"
                         }
                         
                         if (data.type === 'timestamp') {
-                            const time = new Date(parseInt(data.timestamp)).toLocaleTimeString();
+                            const date = new Date(parseInt(data.timestamp));
+                            const time = date.toLocaleTimeString();
+                            clockDiv.textContent = time;
+                            
                             const messageDiv = document.createElement('div');
-                            messageDiv.innerHTML = `<span class="timestamp">${time}</span>`;
+                            messageDiv.className = 'text-gray-600';
+                            messageDiv.textContent = `${time} - Timestamp received`;
                             messagesDiv.appendChild(messageDiv);
                             messagesDiv.scrollTop = messagesDiv.scrollHeight;
                         }
@@ -108,10 +116,9 @@ const WEBSOCKET_TEST_HTML: &str = r#"
                 ws.onclose = (event) => {
                     console.log('WebSocket closed:', event.code, event.reason);
                     statusDiv.textContent = 'Disconnected - Reconnecting...';
-                    statusDiv.style.color = 'red';
+                    statusDiv.className = 'text-sm font-medium rounded-full px-4 py-1 bg-red-100 text-red-800';
                     ws = null;
 
-                    // Schedule reconnect unless it's a normal closure
                     if (event.code !== 1000) {
                         scheduleReconnect();
                     }
@@ -119,8 +126,6 @@ const WEBSOCKET_TEST_HTML: &str = r#"
 
                 ws.onerror = (error) => {
                     console.log('WebSocket error:', error);
-                    // The connection will be closed after this error
-                    // onclose will handle the reconnection
                 };
             } catch (error) {
                 console.error('Error creating WebSocket:', error);
@@ -128,25 +133,20 @@ const WEBSOCKET_TEST_HTML: &str = r#"
             }
         }
         
-        // Handle page visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
-                // Page is hidden, close the connection cleanly
                 cleanupConnection();
             } else {
-                // Page is visible again, reconnect if not connected
                 if (!ws && !isReconnecting) {
                     connect();
                 }
             }
         });
 
-        // Handle page unload
         window.addEventListener('beforeunload', () => {
             cleanupConnection();
         });
         
-        // Initial connection
         connect();
     </script>
 </body>
@@ -307,16 +307,11 @@ pub mod test {
     use super::*;
 
     pub async fn handler(req: Request, ctx: RouteContext<()>) -> Result<Response> {
-        let url = req.url()?;
-        let root_url = format!("{}://{}/", url.scheme(), url.host_str().unwrap_or("localhost"));
-
         let mut headers = Headers::new();
         headers.set("Content-Type", "text/html")?;
 
         let response_body = format!(
-            "{}\n\nAvailable Routes:\n\
-            - GET /websocket_do\n    WebSocket endpoint for real-time clock updates\n    Example: Connect via WebSocket to {root_url}websocket_do\n\
-            - GET /websocket\n    This test page\n    Example: {root_url}websocket\n",
+            "{}",
             WEBSOCKET_TEST_HTML
         );
 
