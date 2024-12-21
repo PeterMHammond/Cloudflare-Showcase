@@ -1,6 +1,7 @@
 use worker::*;
 pub mod routes {
     pub mod about;
+    pub mod index;
 }
 
 #[event(fetch)]
@@ -10,7 +11,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     let router = Router::new();
 
     let response = router
-        .get("/", |_, _| Response::ok("Jesus is Lord!"))
+        .get_async("/", routes::index::handler)
         .get_async("/about", routes::about::handler)
         .run(req, env)
         .await?;
