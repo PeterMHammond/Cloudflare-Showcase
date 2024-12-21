@@ -1,20 +1,29 @@
 use worker::*;
+use routes::{
+    about::handler as about,
+    index::handler as index,
+    websocket_do::handler as websocket_do,
+    websocket_do::test::handler as websocket_test,
+};
 
 mod template;
-pub mod routes {
+mod routes {
     pub mod about;
     pub mod index;
+    pub mod websocket_do;
 }
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     console_error_panic_hook::set_once();
     
-    let router = Router::new();
+    let router = Router::with_data(());
 
     let response = router
-        .get_async("/", routes::index::handler)
-        .get_async("/about", routes::about::handler)
+        .get_async("/", index)
+        .get_async("/about", about)
+        .get_async("/websocket_do", websocket_do)
+        .get_async("/websocket", websocket_test)
         .run(req, env)
         .await?;
 
