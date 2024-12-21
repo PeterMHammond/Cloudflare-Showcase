@@ -1,4 +1,6 @@
 use worker::*;
+
+mod template;
 pub mod routes {
     pub mod about;
     pub mod index;
