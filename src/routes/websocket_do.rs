@@ -10,6 +10,8 @@ use async_std::stream::StreamExt;
 struct Client {
     id: String,
     socket: WebSocket,
+    last_pong: u64,
+    last_ping: u64,
 }
 
 struct SharedState {
@@ -19,7 +21,6 @@ struct SharedState {
 
 #[wasm_bindgen]
 pub struct WebsocketDO {
-    state: State,
     shared: Arc<Mutex<SharedState>>,
 }
 
@@ -27,7 +28,6 @@ pub struct WebsocketDO {
 impl DurableObject for WebsocketDO {
     fn new(state: State, _env: Env) -> Self {
         Self { 
-            state,
             shared: Arc::new(Mutex::new(SharedState {
                 clients: Vec::new(),
                 clock_started: false,
@@ -35,7 +35,7 @@ impl DurableObject for WebsocketDO {
         }
     }
 
-    async fn fetch(&mut self, mut req: Request) -> Result<Response> {
+    async fn fetch(&mut self, req: Request) -> Result<Response> {
         console_log!("🟢 Fetch method invoked.");
         let url = req.url()?;
         
@@ -63,6 +63,8 @@ impl DurableObject for WebsocketDO {
 
                 let server_clone = server.clone();
                 let client_id_clone = client_id.clone();
+                let shared = Arc::clone(&self.shared);
+
                 wasm_bindgen_futures::spawn_local(async move {
                     let mut event_stream = server_clone.events().expect("Failed to get event stream");
                     
@@ -74,6 +76,10 @@ impl DurableObject for WebsocketDO {
                                         match data.get("type").and_then(|t| t.as_str()) {
                                             Some("pong") => {
                                                 console_log!("Received pong from client {}", client_id_clone);
+                                                let mut shared = shared.lock().unwrap();
+                                                if let Some(client) = shared.clients.iter_mut().find(|c| c.id == client_id_clone) {
+                                                    client.last_pong = Date::now().as_millis();
+                                                }
                                             },
                                             Some("client_id_ack") => {
                                                 console_log!("Client {} acknowledged ID", client_id_clone);
@@ -90,16 +96,47 @@ impl DurableObject for WebsocketDO {
                             },
                             Ok(WebsocketEvent::Close(_)) => {
                                 console_log!("Client {} connection closed", client_id_clone);
+                                let mut shared = shared.lock().unwrap();
+                                let previous_count = shared.clients.len();
+                                shared.clients.retain(|c| c.id != client_id_clone);
+                                
+                                // Broadcast updated client count after close
+                                if shared.clients.len() != previous_count {
+                                    let client_count_msg = json!({
+                                        "type": "client_count",
+                                        "count": shared.clients.len()
+                                    }).to_string();
+                                    
+                                    for client in &shared.clients {
+                                        let _ = client.socket.send_with_str(&client_count_msg);
+                                    }
+                                }
                                 break;
                             },
                             Err(e) => {
                                 console_log!("Error receiving message from client {}: {:?}", client_id_clone, e);
+                                let mut shared = shared.lock().unwrap();
+                                let previous_count = shared.clients.len();
+                                shared.clients.retain(|c| c.id != client_id_clone);
+                                
+                                // Broadcast updated client count after error
+                                if shared.clients.len() != previous_count {
+                                    let client_count_msg = json!({
+                                        "type": "client_count",
+                                        "count": shared.clients.len()
+                                    }).to_string();
+                                    
+                                    for client in &shared.clients {
+                                        let _ = client.socket.send_with_str(&client_count_msg);
+                                    }
+                                }
                                 break;
                             }
                         }
                     }
                 });
 
+                let now = Date::now().as_millis();
                 let start_clock = {
                     let mut shared = self.shared.lock().unwrap();
                     
@@ -116,10 +153,29 @@ impl DurableObject for WebsocketDO {
                         }
                     });
                     
+                    // Stagger initial ping time based on client ID hash
+                    let stagger_offset = client_id.bytes().fold(0u64, |acc, b| acc.wrapping_add(b as u64)) % 30000;
+                    let initial_ping = now.saturating_sub(stagger_offset);
+                    
+                    let previous_count = shared.clients.len();
                     shared.clients.push(Client {
                         id: client_id,
                         socket: server.clone(),
+                        last_pong: now,
+                        last_ping: initial_ping,
                     });
+
+                    // Only broadcast if count changed
+                    if shared.clients.len() != previous_count {
+                        let client_count_msg = json!({
+                            "type": "client_count",
+                            "count": shared.clients.len()
+                        }).to_string();
+                        
+                        for client in &shared.clients {
+                            let _ = client.socket.send_with_str(&client_count_msg);
+                        }
+                    }
 
                     !shared.clock_started
                 };
@@ -129,27 +185,99 @@ impl DurableObject for WebsocketDO {
                     
                     wasm_bindgen_futures::spawn_local(async move {
                         loop {
-                            let timestamp = Date::now().as_millis();
-                            let message = json!({
+                            let now = Date::now().as_millis();
+                            let mut shared = shared.lock().unwrap();
+                            
+                            // Process all clients in a single pass
+                            let mut i = 0;
+                            while i < shared.clients.len() {
+                                let client = &mut shared.clients[i];
+                                let client_id = client.id.clone();
+                                
+                                // Check if it's time to ping this client
+                                if now - client.last_ping >= 30000 {
+                                    // Check for ping timeout
+                                    if now - client.last_pong >= 45000 {
+                                        console_log!("Removing client {} due to ping timeout", client_id);
+                                        let previous_count = shared.clients.len();
+                                        shared.clients.remove(i);
+                                        
+                                        // Only broadcast if count changed
+                                        if shared.clients.len() != previous_count {
+                                            let client_count_msg = json!({
+                                                "type": "client_count",
+                                                "count": shared.clients.len()
+                                            }).to_string();
+                                            
+                                            for client in &shared.clients {
+                                                let _ = client.socket.send_with_str(&client_count_msg);
+                                            }
+                                        }
+                                        
+                                        continue;
+                                    }
+                                    
+                                    // Send ping
+                                    match client.socket.send_with_str(&json!({"type": "ping"}).to_string()) {
+                                        Ok(_) => {
+                                            client.last_ping = now;
+                                            i += 1;
+                                        },
+                                        Err(e) => {
+                                            console_log!("Removing client {}: ping failed - {:?}", client_id, e);
+                                            let previous_count = shared.clients.len();
+                                            shared.clients.remove(i);
+                                            
+                                            // Only broadcast if count changed
+                                            if shared.clients.len() != previous_count {
+                                                let client_count_msg = json!({
+                                                    "type": "client_count",
+                                                    "count": shared.clients.len()
+                                                }).to_string();
+                                                
+                                                for client in &shared.clients {
+                                                    let _ = client.socket.send_with_str(&client_count_msg);
+                                                }
+                                            }
+                                            
+                                            continue;
+                                        }
+                                    }
+                                } else {
+                                    i += 1;
+                                }
+                            }
+                            
+                            // Send timestamp to all remaining clients
+                            let timestamp_msg = json!({
                                 "type": "timestamp",
-                                "timestamp": timestamp
+                                "timestamp": now
                             }).to_string();
                             
-                            let mut shared = shared.lock().unwrap();
-                            shared.clients.retain(|client| {
-                                if let Err(_) = client.socket.send_with_str(&json!({"type": "ping"}).to_string()) {
-                                    console_log!("Removing disconnected client {}: ping failed", client.id);
-                                    return false;
-                                }
-                                
-                                match client.socket.send_with_str(&message) {
-                                    Ok(_) => true,
+                            let mut i = 0;
+                            while i < shared.clients.len() {
+                                let client = &shared.clients[i];
+                                match client.socket.send_with_str(&timestamp_msg) {
+                                    Ok(_) => i += 1,
                                     Err(e) => {
-                                        console_log!("Removing disconnected client {}: send failed - {:?}", client.id, e);
-                                        false
+                                        console_log!("Removing client {}: timestamp failed - {:?}", client.id, e);
+                                        let previous_count = shared.clients.len();
+                                        shared.clients.remove(i);
+                                        
+                                        // Broadcast updated client count after timestamp failure
+                                        if shared.clients.len() != previous_count {
+                                            let client_count_msg = json!({
+                                                "type": "client_count",
+                                                "count": shared.clients.len()
+                                            }).to_string();
+                                            
+                                            for client in &shared.clients {
+                                                let _ = client.socket.send_with_str(&client_count_msg);
+                                            }
+                                        }
                                     }
                                 }
-                            });
+                            }
                             
                             if shared.clients.is_empty() {
                                 shared.clock_started = false;

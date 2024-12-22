@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="h-full p-8 space-y-4">
-    <article class="bg-white rounded-lg shadow-sm p-8 space-y-4">
+<section class="h-full p-8 flex flex-col overflow-hidden">
+    <article class="bg-white rounded-lg shadow-sm p-8 space-y-4 flex-none">
         <header class="text-2xl font-bold text-gray-800">Worker Clock Events</header>
         <aside id="status" class="inline-block text-sm font-medium rounded-full px-4 py-1 text-green-600 bg-green-100">
             Connected
@@ -12,27 +12,39 @@
                 --:--:--
             </time>
             <section id="additional-info" class="inline-block bg-gray-50 px-6 py-4 rounded-lg shadow-inner text-gray-800">
-                <header class="font-semibold text-sm">Additional Info</header>
-                <p class="text-xs">More details about the clock here...</p>
+                <header class="font-semibold text-sm">Connected Clients</header>
+                <p id="client-count" class="text-2xl font-bold">0</p>
             </section>
         </section>
     </article>
-    
-    <article class="bg-white rounded-lg shadow-sm p-8">
-        <header class="text-lg font-semibold text-gray-800 mb-4">Debug Log</header>
-        <section id="messages" class="font-mono text-sm bg-black text-green-500 rounded-lg p-4 h-[200px] overflow-y-auto">
+
+    <article class="flex-1 bg-white rounded-lg shadow-sm p-8 mt-4 flex flex-col overflow-hidden">
+        <header class="text-lg font-semibold text-gray-800 mb-4 flex-none">Debug Log</header>
+        <section id="messages" class="flex-1 min-h-0 max-h-[300px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto">
             <!-- Logs will be dynamically appended here -->
         </section>
     </article>
+
     <script>
         const messagesDiv = document.getElementById('messages');
         const statusDiv = document.getElementById('status');
         const clockDiv = document.getElementById('clock');
+        const MAX_LOG_MESSAGES = 100; // Keep only last 100 messages
         let ws = null;
         let clientId = localStorage.getItem('websocket_client_id');
         let reconnectTimer = null;
         let isReconnecting = false;
-        
+
+        function addLogMessage(messageDiv) {
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            // Remove old messages if we exceed the limit
+            while (messagesDiv.children.length > MAX_LOG_MESSAGES) {
+                messagesDiv.removeChild(messagesDiv.firstChild);
+            }
+        }
+
         function cleanupConnection() {
             if (ws) {
                 try {
@@ -58,7 +70,7 @@
                 }, delay);
             }
         }
-        
+
         function connect() {
             cleanupConnection();
 
@@ -66,66 +78,74 @@
                 const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
                 const url = `${protocol}//${window.location.host}/websocket_do${clientId ? '?id=' + clientId : ''}`;
                 ws = new WebSocket(url);
-                
+
                 ws.onopen = () => {
                     statusDiv.textContent = 'Connected';
                     statusDiv.className = 'inline-block text-sm font-medium rounded-full px-4 py-1 bg-green-100 text-green-800';
                     const messageDiv = document.createElement('div');
                     messageDiv.className = 'text-yellow-500';
                     messageDiv.textContent = `[${new Date().toLocaleTimeString()}] 🔌 WebSocket connected`;
-                    messagesDiv.appendChild(messageDiv);
+                    addLogMessage(messageDiv);
                     isReconnecting = false;
                 };
-                
+
                 ws.onmessage = (event) => {
-    try {
-        const data = JSON.parse(event.data);
-        console.log('Received message:', data);
-        
-        const date = new Date();
-        const time = date.toLocaleTimeString();
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'text-green-500';
-        messageDiv.textContent = `[${time}] ⬇️ Received: ${JSON.stringify(data)}`;
-        messagesDiv.appendChild(messageDiv);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        
-        if (data.type === 'client_id') {
-            clientId = data.id;
-            localStorage.setItem('websocket_client_id', clientId);
-            ws.send(JSON.stringify({ type: 'client_id_ack', id: clientId }));
-            logOutgoingMessage({ type: 'client_id_ack', id: clientId });
-            return;
-        }
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('Received message:', data);
 
-        if (data.type === 'ping') {
-            ws.send(JSON.stringify({ type: 'pong' }));
-            logOutgoingMessage({ type: 'pong' });
-            return;
-        }
-        
-        if (data.type === 'timestamp') {
-            const timestamp = parseInt(data.timestamp);
-            const timeStr = new Date(timestamp).toLocaleTimeString();
-            clockDiv.textContent = timeStr;
-        }
-    } catch (error) {
-        console.error('Error processing message:', error, event.data);
-        const errorDiv = document.createElement('div');
-        errorDiv.className = 'text-red-500';
-        errorDiv.textContent = `[${new Date().toLocaleTimeString()}] ❌ Error: ${error.message}`;
-        messagesDiv.appendChild(errorDiv);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-    }
-};
+                        const date = new Date();
+                        const time = date.toLocaleTimeString();
+                        const messageDiv = document.createElement('div');
 
-function logOutgoingMessage(data) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = 'text-blue-500';
-    messageDiv.textContent = `[${new Date().toLocaleTimeString()}] ⬆️ Sent: ${JSON.stringify(data)}`;
-    messagesDiv.appendChild(messageDiv);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
+                        if (data.type === 'ping') {
+                            messageDiv.className = 'text-purple-400';
+                        } else {
+                            messageDiv.className = 'text-green-500';
+                        }
+
+                        messageDiv.textContent = `[${time}] ⬇️ Received: ${JSON.stringify(data)}`;
+                        addLogMessage(messageDiv);
+
+                        if (data.type === 'client_id') {
+                            clientId = data.id;
+                            localStorage.setItem('websocket_client_id', clientId);
+                            ws.send(JSON.stringify({ type: 'client_id_ack', id: clientId }));
+                            logOutgoingMessage({ type: 'client_id_ack', id: clientId });
+                            return;
+                        }
+
+                        if (data.type === 'ping') {
+                            ws.send(JSON.stringify({ type: 'pong' }));
+                            logOutgoingMessage({ type: 'pong' });
+                            return;
+                        }
+
+                        if (data.type === 'timestamp') {
+                            const timestamp = parseInt(data.timestamp);
+                            const timeStr = new Date(timestamp).toLocaleTimeString();
+                            clockDiv.textContent = timeStr;
+                        }
+
+                        if (data.type === 'client_count') {
+                            const clientCountElement = document.getElementById('client-count');
+                            clientCountElement.textContent = data.count;
+                        }
+                    } catch (error) {
+                        console.error('Error processing message:', error, event.data);
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'text-red-500';
+                        errorDiv.textContent = `[${new Date().toLocaleTimeString()}] ❌ Error: ${error.message}`;
+                        addLogMessage(errorDiv);
+                    }
+                };
+
+                function logOutgoingMessage(data) {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'text-blue-500';
+                    messageDiv.textContent = `[${new Date().toLocaleTimeString()}] ⬆️ Sent: ${JSON.stringify(data)}`;
+                    addLogMessage(messageDiv);
+                }
 
                 ws.onclose = (event) => {
                     console.log('WebSocket closed:', event.code, event.reason);
@@ -134,7 +154,7 @@ function logOutgoingMessage(data) {
                     const messageDiv = document.createElement('div');
                     messageDiv.className = 'text-yellow-500';
                     messageDiv.textContent = `[${new Date().toLocaleTimeString()}] 🔌 WebSocket disconnected (${event.code}: ${event.reason || 'No reason provided'})`;
-                    messagesDiv.appendChild(messageDiv);
+                    addLogMessage(messageDiv);
                     ws = null;
 
                     if (event.code !== 1000) {
@@ -150,7 +170,7 @@ function logOutgoingMessage(data) {
                 scheduleReconnect();
             }
         }
-        
+
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 cleanupConnection();
@@ -164,8 +184,8 @@ function logOutgoingMessage(data) {
         window.addEventListener('beforeunload', () => {
             cleanupConnection();
         });
-        
+
         connect();
     </script>
 </section>
-{% endblock %} 
+{% endblock %}
