@@ -17,6 +17,8 @@ struct Client {
 struct SharedState {
     clients: Vec<Client>,
     clock_started: bool,
+    shared_checkbox: bool,
+    shared_input: String,
 }
 
 #[wasm_bindgen]
@@ -31,6 +33,8 @@ impl DurableObject for WebsocketDO {
             shared: Arc::new(Mutex::new(SharedState {
                 clients: Vec::new(),
                 clock_started: false,
+                shared_checkbox: false,
+                shared_input: String::new(),
             })),
         }
     }
@@ -83,6 +87,48 @@ impl DurableObject for WebsocketDO {
                                             },
                                             Some("client_id_ack") => {
                                                 console_log!("Client {} acknowledged ID", client_id_clone);
+                                            },
+                                            Some("shared_checkbox") => {
+                                                if let Some(checked) = data.get("checked").and_then(|v| v.as_bool()) {
+                                                    let mut shared = shared.lock().unwrap();
+                                                    shared.shared_checkbox = checked;
+                                                    // Broadcast to all clients
+                                                    let msg = json!({
+                                                        "type": "shared_checkbox",
+                                                        "checked": checked
+                                                    }).to_string();
+                                                    for client in &shared.clients {
+                                                        let _ = client.socket.send_with_str(&msg);
+                                                    }
+                                                }
+                                            },
+                                            Some("shared_input") => {
+                                                if let Some(value) = data.get("value").and_then(|v| v.as_str()) {
+                                                    let mut shared = shared.lock().unwrap();
+                                                    shared.shared_input = value.to_string();
+                                                    // Broadcast to all clients
+                                                    let msg = json!({
+                                                        "type": "shared_input",
+                                                        "value": value
+                                                    }).to_string();
+                                                    for client in &shared.clients {
+                                                        let _ = client.socket.send_with_str(&msg);
+                                                    }
+                                                }
+                                            },
+                                            Some("request_state") => {
+                                                let shared = shared.lock().unwrap();
+                                                // Send current state to the requesting client
+                                                let checkbox_msg = json!({
+                                                    "type": "shared_checkbox",
+                                                    "checked": shared.shared_checkbox
+                                                }).to_string();
+                                                let input_msg = json!({
+                                                    "type": "shared_input",
+                                                    "value": shared.shared_input
+                                                }).to_string();
+                                                let _ = server_clone.send_with_str(&checkbox_msg);
+                                                let _ = server_clone.send_with_str(&input_msg);
                                             },
                                             Some(msg_type) => {
                                                 console_log!("Received message type {} from client {}", msg_type, client_id_clone);

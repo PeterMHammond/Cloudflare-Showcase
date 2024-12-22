@@ -3,17 +3,28 @@
 {% block content %}
 <section class="h-full p-8 flex flex-col overflow-hidden">
     <article class="bg-white rounded-lg shadow-sm p-8 space-y-4 flex-none">
-        <header class="text-2xl font-bold text-gray-800">Worker Clock Events</header>
+        <header class="text-2xl font-bold text-gray-800">Websocket Events Example</header>
         <aside id="status" class="inline-block text-sm font-medium rounded-full px-4 py-1 text-green-600 bg-green-100">
             Connected
         </aside>
         <section class="flex items-start space-x-4">
-            <time id="clock" class="inline-block text-4xl font-mono font-bold text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner">
-                --:--:--
+            <time id="clock" class="inline-block text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner h-[100px] flex flex-col items-center justify-center">
+                <header class="font-semibold text-sm">Clock Event</header>
+                <p class="text-4xl font-bold">--:--:--</p>
             </time>
-            <section id="additional-info" class="inline-block bg-gray-50 px-6 py-4 rounded-lg shadow-inner text-gray-800">
+            <section id="additional-info" class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
                 <header class="font-semibold text-sm">Connected Clients</header>
-                <p id="client-count" class="text-2xl font-bold">0</p>
+                <p id="client-count" class="text-4xl font-bold">0</p>
+            </section>
+            <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
+                <header class="font-semibold text-sm">Shared Checkbox</header>
+                <label class="flex items-center space-x-2 mt-2">
+                    <input type="checkbox" id="shared-checkbox" class="w-6 h-6 rounded">
+                </label>
+            </section>
+            <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
+                <header class="font-semibold text-sm">Shared Input</header>
+                <input type="text" id="shared-input" class="mt-2 px-4 py-2 border rounded-lg text-lg text-center" placeholder="Type here...">
             </section>
         </section>
     </article>
@@ -28,7 +39,9 @@
     <script>
         const messagesDiv = document.getElementById('messages');
         const statusDiv = document.getElementById('status');
-        const clockDiv = document.getElementById('clock');
+        const clockDiv = document.getElementById('clock').querySelector('p');
+        const sharedCheckbox = document.getElementById('shared-checkbox');
+        const sharedInput = document.getElementById('shared-input');
         const MAX_LOG_MESSAGES = 100; // Keep only last 100 messages
         let ws = null;
         let clientId = localStorage.getItem('websocket_client_id');
@@ -87,6 +100,9 @@
                     messageDiv.textContent = `[${new Date().toLocaleTimeString()}] 🔌 WebSocket connected`;
                     addLogMessage(messageDiv);
                     isReconnecting = false;
+
+                    // Request initial state
+                    ws.send(JSON.stringify({ type: 'request_state' }));
                 };
 
                 ws.onmessage = (event) => {
@@ -130,6 +146,14 @@
                         if (data.type === 'client_count') {
                             const clientCountElement = document.getElementById('client-count');
                             clientCountElement.textContent = data.count;
+                        }
+
+                        if (data.type === 'shared_checkbox') {
+                            sharedCheckbox.checked = data.checked;
+                        }
+
+                        if (data.type === 'shared_input') {
+                            sharedInput.value = data.value;
                         }
                     } catch (error) {
                         console.error('Error processing message:', error, event.data);
@@ -183,6 +207,29 @@
 
         window.addEventListener('beforeunload', () => {
             cleanupConnection();
+        });
+
+        // Add event listeners for shared components
+        sharedCheckbox.addEventListener('change', () => {
+            if (ws) {
+                const message = {
+                    type: 'shared_checkbox',
+                    checked: sharedCheckbox.checked
+                };
+                ws.send(JSON.stringify(message));
+                logOutgoingMessage(message);
+            }
+        });
+
+        sharedInput.addEventListener('input', () => {
+            if (ws) {
+                const message = {
+                    type: 'shared_input',
+                    value: sharedInput.value
+                };
+                ws.send(JSON.stringify(message));
+                logOutgoingMessage(message);
+            }
         });
 
         connect();
