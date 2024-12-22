@@ -2,7 +2,7 @@ use worker::*;
 use routes::{
     about::handler as about,
     index::handler as index,
-    websocket::handler as websocket_do,
+    websocket_do::handler as websocket_do,
     websocket::websocket::handler as websocket,
 };
 
@@ -11,6 +11,7 @@ mod routes {
     pub mod about;
     pub mod index;
     pub mod websocket;
+    pub mod websocket_do;
 }
 
 #[event(fetch)]

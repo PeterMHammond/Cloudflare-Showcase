@@ -70,7 +70,10 @@
                 ws.onopen = () => {
                     statusDiv.textContent = 'Connected';
                     statusDiv.className = 'inline-block text-sm font-medium rounded-full px-4 py-1 bg-green-100 text-green-800';
-                    console.log('WebSocket connected');
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'text-yellow-500';
+                    messageDiv.textContent = `[${new Date().toLocaleTimeString()}] 🔌 WebSocket connected`;
+                    messagesDiv.appendChild(messageDiv);
                     isReconnecting = false;
                 };
                 
@@ -79,44 +82,59 @@
         const data = JSON.parse(event.data);
         console.log('Received message:', data);
         
+        const date = new Date();
+        const time = date.toLocaleTimeString();
+        const messageDiv = document.createElement('div');
+        messageDiv.className = 'text-green-500';
+        messageDiv.textContent = `[${time}] ⬇️ Received: ${JSON.stringify(data)}`;
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        
         if (data.type === 'client_id') {
             clientId = data.id;
             localStorage.setItem('websocket_client_id', clientId);
+            ws.send(JSON.stringify({ type: 'client_id_ack', id: clientId }));
+            logOutgoingMessage({ type: 'client_id_ack', id: clientId });
             return;
         }
 
         if (data.type === 'ping') {
-            console.log('Ping received from server');
+            ws.send(JSON.stringify({ type: 'pong' }));
+            logOutgoingMessage({ type: 'pong' });
             return;
         }
         
         if (data.type === 'timestamp') {
-            const date = new Date(parseInt(data.timestamp));
-            const time = date.toLocaleTimeString();
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'text-green-500';
-            messageDiv.textContent = `[${time}] Message received: ${JSON.stringify(data)}`;
-            messagesDiv.appendChild(messageDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            clockDiv.textContent = time;
+            const timestamp = parseInt(data.timestamp);
+            const timeStr = new Date(timestamp).toLocaleTimeString();
+            clockDiv.textContent = timeStr;
         }
     } catch (error) {
         console.error('Error processing message:', error, event.data);
-
         const errorDiv = document.createElement('div');
         errorDiv.className = 'text-red-500';
-        errorDiv.textContent = 'Error processing message: ' + event.data;
-
+        errorDiv.textContent = `[${new Date().toLocaleTimeString()}] ❌ Error: ${error.message}`;
         messagesDiv.appendChild(errorDiv);
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 };
 
-                
+function logOutgoingMessage(data) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'text-blue-500';
+    messageDiv.textContent = `[${new Date().toLocaleTimeString()}] ⬆️ Sent: ${JSON.stringify(data)}`;
+    messagesDiv.appendChild(messageDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
                 ws.onclose = (event) => {
                     console.log('WebSocket closed:', event.code, event.reason);
                     statusDiv.textContent = 'Disconnected - Reconnecting...';
                     statusDiv.className = 'inline-block text-sm font-medium rounded-full px-4 py-1 bg-red-100 text-red-800';
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'text-yellow-500';
+                    messageDiv.textContent = `[${new Date().toLocaleTimeString()}] 🔌 WebSocket disconnected (${event.code}: ${event.reason || 'No reason provided'})`;
+                    messagesDiv.appendChild(messageDiv);
                     ws = null;
 
                     if (event.code !== 1000) {
