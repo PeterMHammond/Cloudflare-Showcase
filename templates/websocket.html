@@ -1,238 +1,160 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="h-full p-8 flex flex-col overflow-hidden">
+<script>
+htmx.defineExtension('time-converter', {
+    transformResponse: function(text, xhr, elt) {
+        try {
+            // Try to find timestamp in the HTML response
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = text;
+            
+            // Find elements with data-utc attribute
+            const timeElements = tempDiv.querySelectorAll('[data-utc]');
+            timeElements.forEach(el => {
+                const utcTime = el.getAttribute('data-utc');
+                const localTime = new Date(parseInt(utcTime)).toLocaleTimeString();
+                el.textContent = localTime;
+            });
+            
+            return tempDiv.innerHTML;
+        } catch (e) {
+            console.error('Error converting time:', e);
+            return text;
+        }
+    }
+});
+
+htmx.defineExtension('ws-debug', {
+    onEvent: function(name, evt) {
+        function formatMessage(msg) {
+            if (typeof msg === 'string') {
+                return msg
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#039;')
+                    .replace(/\n/g, '<br>')
+                    .replace(/\s/g, '&nbsp;');
+            } else {
+                return JSON.stringify(msg, null, 2);
+            }
+        }
+
+        if (name === "htmx:wsBeforeMessage") {
+            const logDiv = document.getElementById('message-log');
+            if (logDiv) {
+                const message = evt.detail.message;
+                const timestamp = new Date().toLocaleTimeString();
+                const debugEntry = document.createElement('div');
+                debugEntry.className = 'text-blue-400 whitespace-pre';
+                debugEntry.innerHTML = `[${timestamp}] Raw Message Received:<br>${formatMessage(message)}`;
+
+                // Also log the parsed message if it's JSON
+                try {
+                    if (typeof message === 'string') {
+                        const parsed = JSON.parse(message);
+                        const parsedEntry = document.createElement('div');
+                        parsedEntry.className = 'text-blue-200 whitespace-pre pl-4 text-xs';
+                        parsedEntry.innerHTML = `Parsed as:<br>${JSON.stringify(parsed, null, 2)}`;
+                        debugEntry.appendChild(parsedEntry);
+                    }
+                } catch (e) {
+                    // Not JSON, ignore
+                }
+
+                logDiv.appendChild(debugEntry);
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+        }
+        if (name === "htmx:wsBeforeSend") {
+            const logDiv = document.getElementById('message-log');
+            if (logDiv) {
+                const message = evt.detail.message;
+                const timestamp = new Date().toLocaleTimeString();
+                const debugEntry = document.createElement('div');
+                debugEntry.className = 'text-yellow-400 whitespace-pre';
+                debugEntry.innerHTML = `[${timestamp}] Raw Message Sent:<br>${formatMessage(message)}`;
+
+                // Also log the parsed message if it's JSON
+                try {
+                    if (typeof message === 'string') {
+                        const parsed = JSON.parse(message);
+                        const parsedEntry = document.createElement('div');
+                        parsedEntry.className = 'text-yellow-200 whitespace-pre pl-4 text-xs';
+                        parsedEntry.innerHTML = `Parsed as:<br>${JSON.stringify(parsed, null, 2)}`;
+                        debugEntry.appendChild(parsedEntry);
+                    }
+                } catch (e) {
+                    // Not JSON, ignore
+                }
+
+                logDiv.appendChild(debugEntry);
+                logDiv.scrollTop = logDiv.scrollHeight;
+            }
+        }
+    }
+});
+</script>
+
+<section class="h-full p-8 flex flex-col overflow-hidden" 
+         hx-ext="ws,time-converter,ws-debug" 
+         ws-connect="/websocket_do">
     <article class="bg-white rounded-lg shadow-sm p-8 space-y-4 flex-none">
         <header class="text-2xl font-bold text-gray-800">Websocket Events Example</header>
-        <aside id="status" class="inline-block text-sm font-medium rounded-full px-4 py-1 text-green-600 bg-green-100">
-            Connected
+        <aside id="connection-status" 
+               class="inline-block text-sm font-medium rounded-full px-4 py-1"
+               ws-connected="this.classList.add('bg-green-100', 'text-green-600'); this.textContent='Connected'"
+               ws-disconnected="this.classList.remove('bg-green-100', 'text-green-600'); this.classList.add('bg-red-100', 'text-red-600'); this.textContent='Disconnected'">
+            Connecting...
         </aside>
         <section class="flex items-start space-x-4">
-            <time id="clock" class="inline-block text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner h-[100px] flex flex-col items-center justify-center">
+            <time class="inline-block text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner h-[100px] flex flex-col items-center justify-center">
                 <header class="font-semibold text-sm">Clock Event</header>
-                <p class="text-4xl font-bold">--:--:--</p>
+                <p id="clock-display" 
+                   class="text-4xl font-bold">--:--:--</p>
             </time>
-            <section id="additional-info" class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
+            
+            <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
                 <header class="font-semibold text-sm">Connected Clients</header>
-                <p id="client-count" class="text-4xl font-bold">0</p>
+                <p id="client-count" 
+                   class="text-4xl font-bold">0</p>
             </section>
+            
             <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
                 <header class="font-semibold text-sm">Shared Checkbox</header>
-                <label class="flex items-center space-x-2 mt-2">
-                    <input type="checkbox" id="shared-checkbox" class="w-6 h-6 rounded">
-                </label>
+                <div id="shared-checkbox-container">
+                    <form ws-send hx-trigger="change from:input">
+                        <label class="flex items-center space-x-2 mt-2">
+                            <input type="checkbox" 
+                                   id="shared-checkbox"
+                                   name="checkbox-state"
+                                   class="w-6 h-6 rounded">
+                        </label>
+                    </form>
+                </div>
             </section>
+            
             <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
                 <header class="font-semibold text-sm">Shared Input</header>
-                <input type="text" id="shared-input" class="mt-2 px-4 py-2 border rounded-lg text-lg text-center" placeholder="Type here...">
+                <form ws-send>
+                    <input type="text" 
+                           id="shared-input"
+                           name="input-text"
+                           class="mt-2 px-4 py-2 border rounded-lg text-lg text-center" 
+                           placeholder="Type here..."
+                           hx-trigger="keyup changed delay:200ms">
+                </form>
             </section>
         </section>
     </article>
 
     <article class="flex-1 bg-white rounded-lg shadow-sm p-8 mt-4 flex flex-col overflow-hidden">
         <header class="text-lg font-semibold text-gray-800 mb-4 flex-none">Debug Log</header>
-        <section id="messages" class="flex-1 min-h-0 max-h-[300px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto">
-            <!-- Logs will be dynamically appended here -->
+        <section id="message-log" 
+                 class="flex-1 min-h-0 max-h-[300px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto space-y-1">
         </section>
     </article>
-
-    <script>
-        const messagesDiv = document.getElementById('messages');
-        const statusDiv = document.getElementById('status');
-        const clockDiv = document.getElementById('clock').querySelector('p');
-        const sharedCheckbox = document.getElementById('shared-checkbox');
-        const sharedInput = document.getElementById('shared-input');
-        const MAX_LOG_MESSAGES = 100; // Keep only last 100 messages
-        let ws = null;
-        let clientId = localStorage.getItem('websocket_client_id');
-        let reconnectTimer = null;
-        let isReconnecting = false;
-
-        function addLogMessage(messageDiv) {
-            messagesDiv.appendChild(messageDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            
-            // Remove old messages if we exceed the limit
-            while (messagesDiv.children.length > MAX_LOG_MESSAGES) {
-                messagesDiv.removeChild(messagesDiv.firstChild);
-            }
-        }
-
-        function cleanupConnection() {
-            if (ws) {
-                try {
-                    ws.close();
-                } catch (e) {
-                    console.log('Error closing WebSocket:', e);
-                }
-                ws = null;
-            }
-            if (reconnectTimer) {
-                clearTimeout(reconnectTimer);
-                reconnectTimer = null;
-            }
-        }
-
-        function scheduleReconnect(delay = 1000) {
-            if (!isReconnecting && !reconnectTimer) {
-                isReconnecting = true;
-                reconnectTimer = setTimeout(() => {
-                    reconnectTimer = null;
-                    isReconnecting = false;
-                    if (!ws) connect();
-                }, delay);
-            }
-        }
-
-        function connect() {
-            cleanupConnection();
-
-            try {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const url = `${protocol}//${window.location.host}/websocket_do${clientId ? '?id=' + clientId : ''}`;
-                ws = new WebSocket(url);
-
-                ws.onopen = () => {
-                    statusDiv.textContent = 'Connected';
-                    statusDiv.className = 'inline-block text-sm font-medium rounded-full px-4 py-1 bg-green-100 text-green-800';
-                    const messageDiv = document.createElement('div');
-                    messageDiv.className = 'text-yellow-500';
-                    messageDiv.textContent = `[${new Date().toLocaleTimeString()}] 🔌 WebSocket connected`;
-                    addLogMessage(messageDiv);
-                    isReconnecting = false;
-
-                    // Request initial state
-                    ws.send(JSON.stringify({ type: 'request_state' }));
-                };
-
-                ws.onmessage = (event) => {
-                    try {
-                        const data = JSON.parse(event.data);
-                        console.log('Received message:', data);
-
-                        const date = new Date();
-                        const time = date.toLocaleTimeString();
-                        const messageDiv = document.createElement('div');
-
-                        if (data.type === 'ping') {
-                            messageDiv.className = 'text-purple-400';
-                        } else {
-                            messageDiv.className = 'text-green-500';
-                        }
-
-                        messageDiv.textContent = `[${time}] ⬇️ Received: ${JSON.stringify(data)}`;
-                        addLogMessage(messageDiv);
-
-                        if (data.type === 'client_id') {
-                            clientId = data.id;
-                            localStorage.setItem('websocket_client_id', clientId);
-                            ws.send(JSON.stringify({ type: 'client_id_ack', id: clientId }));
-                            logOutgoingMessage({ type: 'client_id_ack', id: clientId });
-                            return;
-                        }
-
-                        if (data.type === 'ping') {
-                            ws.send(JSON.stringify({ type: 'pong' }));
-                            logOutgoingMessage({ type: 'pong' });
-                            return;
-                        }
-
-                        if (data.type === 'timestamp') {
-                            const timestamp = parseInt(data.timestamp);
-                            const timeStr = new Date(timestamp).toLocaleTimeString();
-                            clockDiv.textContent = timeStr;
-                        }
-
-                        if (data.type === 'client_count') {
-                            const clientCountElement = document.getElementById('client-count');
-                            clientCountElement.textContent = data.count;
-                        }
-
-                        if (data.type === 'shared_checkbox') {
-                            sharedCheckbox.checked = data.checked;
-                        }
-
-                        if (data.type === 'shared_input') {
-                            sharedInput.value = data.value;
-                        }
-                    } catch (error) {
-                        console.error('Error processing message:', error, event.data);
-                        const errorDiv = document.createElement('div');
-                        errorDiv.className = 'text-red-500';
-                        errorDiv.textContent = `[${new Date().toLocaleTimeString()}] ❌ Error: ${error.message}`;
-                        addLogMessage(errorDiv);
-                    }
-                };
-
-                function logOutgoingMessage(data) {
-                    const messageDiv = document.createElement('div');
-                    messageDiv.className = 'text-blue-500';
-                    messageDiv.textContent = `[${new Date().toLocaleTimeString()}] ⬆️ Sent: ${JSON.stringify(data)}`;
-                    addLogMessage(messageDiv);
-                }
-
-                ws.onclose = (event) => {
-                    console.log('WebSocket closed:', event.code, event.reason);
-                    statusDiv.textContent = 'Disconnected - Reconnecting...';
-                    statusDiv.className = 'inline-block text-sm font-medium rounded-full px-4 py-1 bg-red-100 text-red-800';
-                    const messageDiv = document.createElement('div');
-                    messageDiv.className = 'text-yellow-500';
-                    messageDiv.textContent = `[${new Date().toLocaleTimeString()}] 🔌 WebSocket disconnected (${event.code}: ${event.reason || 'No reason provided'})`;
-                    addLogMessage(messageDiv);
-                    ws = null;
-
-                    if (event.code !== 1000) {
-                        scheduleReconnect();
-                    }
-                };
-
-                ws.onerror = (error) => {
-                    console.log('WebSocket error:', error);
-                };
-            } catch (error) {
-                console.error('Error creating WebSocket:', error);
-                scheduleReconnect();
-            }
-        }
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.hidden) {
-                cleanupConnection();
-            } else {
-                if (!ws && !isReconnecting) {
-                    connect();
-                }
-            }
-        });
-
-        window.addEventListener('beforeunload', () => {
-            cleanupConnection();
-        });
-
-        // Add event listeners for shared components
-        sharedCheckbox.addEventListener('change', () => {
-            if (ws) {
-                const message = {
-                    type: 'shared_checkbox',
-                    checked: sharedCheckbox.checked
-                };
-                ws.send(JSON.stringify(message));
-                logOutgoingMessage(message);
-            }
-        });
-
-        sharedInput.addEventListener('input', () => {
-            if (ws) {
-                const message = {
-                    type: 'shared_input',
-                    value: sharedInput.value
-                };
-                ws.send(JSON.stringify(message));
-                logOutgoingMessage(message);
-            }
-        });
-
-        connect();
-    </script>
 </section>
 {% endblock %}
