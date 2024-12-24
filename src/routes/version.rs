@@ -21,7 +21,14 @@ pub async fn handler(req: Request, _ctx: RouteContext<()>) -> Result<Response> {
         License: {license}\n\
         Current Route: {url}\n\n\
         Available Routes:\n\
-        - GET /version\n    Shows this diagnostic information\n    Example: curl -X GET {root_url}version\n"
+        - GET /version\n    Shows this diagnostic information\n    Example: curl -X GET {root_url}version\n\
+        - GET /websocket\n    Interactive WebSocket demo page\n    Example: Visit {root_url}websocket\n\
+        - WS /websocket_do\n    WebSocket connection endpoint (Durable Object):\n\
+          * Real-time clock updates\n\
+          * Client count tracking\n\
+          * Shared form controls (checkbox, textarea)\n\
+          * Debug logging\n\
+          Note: This is a WebSocket endpoint, not accessible via HTTP\n"
     );
 
     Response::ok(response_body)

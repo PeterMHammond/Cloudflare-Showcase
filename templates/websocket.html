@@ -3,32 +3,6 @@
 {% block content %}
 <script>
 
-// Define a WebSocket time converter extension for transforming timestamps to local time
-htmx.defineExtension('time-converter', {
-    transformResponse: function (text, xhr, elt) {
-        try {
-            const data = JSON.parse(text);
-            if (data.id) {
-                const targetElement = document.getElementById(data.id);
-                if (targetElement) {
-                    if (data.utc) {
-                        // Handle clock updates
-                        targetElement.textContent = new Date(data.utc).toLocaleTimeString();
-                        targetElement.setAttribute('data-utc', data.utc);
-                    } else if (data.value !== undefined) {
-                        // Handle numeric updates
-                        targetElement.textContent = data.value;
-                    }
-                }
-            }
-            return text;
-        } catch (e) {
-            // Not valid JSON, just return the original text
-            return text;
-        }
-    }
-});
-
 // Define a WebSocket debug extension for logging WebSocket events
 htmx.defineExtension('ws-debug', {
     onEvent: function(name, evt) {
@@ -101,20 +75,6 @@ htmx.defineExtension('ws-debug', {
     }
 });
 
-// Handle checkbox events
-htmx.defineExtension('checkbox-handler', {
-    onEvent: function (name, evt) {
-        if (name === "htmx:wsConfigSend") {
-            const form = evt.detail.triggeringEvent.target.closest('form');
-            const checkboxes = form.querySelectorAll('input[type="checkbox"]');
-
-            checkboxes.forEach((checkbox) => {
-                evt.detail.parameters[checkbox.name] = checkbox.checked ? true : false;
-            });
-        }
-    }
-});
-
 // Handle connection status
 htmx.defineExtension("ws-connection-status", {
     onEvent: function (name, evt) {
@@ -146,35 +106,29 @@ htmx.defineExtension('form-handler', {
         if (name === 'htmx:wsConfigSend') {
             const form = evt.detail.triggeringEvent.target.closest('form');
             const inputs = form.querySelectorAll('input, select, textarea');
-
-            // Ensure parameters exist
+            
             evt.detail.parameters = evt.detail.parameters || {};
 
-            // Process each form control
+            const valueGetters = {
+                checkbox: input => input.checked,
+                radio: input => input.checked ? input.value : undefined,
+                select: input => input.value,
+                textarea: input => input.value,
+                text: input => input.value,
+                password: input => input.value,
+                default: input => input.value
+            };
+
             inputs.forEach((input) => {
-                // Derive the control type
                 const controlType = input.type || input.tagName.toLowerCase();
-
-                // Process value by input type
-                if (input.type === 'checkbox') {
-                    evt.detail.parameters[input.name] = input.checked ? true : false;
-                } else if (input.type === 'radio') {
-                    if (input.checked) {
-                        evt.detail.parameters[input.name] = input.value;
-                    }
-                } else if (input.tagName.toLowerCase() === 'select') {
-                    evt.detail.parameters[input.name] = input.value;
-                } else if (input.tagName.toLowerCase() === 'textarea' || input.type === 'text' || input.type === 'password') {
-                    evt.detail.parameters[input.name] = input.value;
-                } else {
-                    evt.detail.parameters[input.name] = input.value;
+                const getValue = valueGetters[controlType] || valueGetters.default;
+                const value = getValue(input);
+                
+                if (value !== undefined) {
+                    evt.detail.parameters[input.name] = value;
                 }
-
-                // Add control-type metadata separately
                 evt.detail.parameters['control-type'] = controlType;
             });
-
-            console.log('Final parameters after form-handler processing:', evt.detail.parameters);
         }
     }
 });
@@ -184,10 +138,28 @@ htmx.defineExtension('form-update-handler', {
     transformResponse: function (text, xhr, elt) {
         try {
             const data = JSON.parse(text);
+
+            // Handle client count updates
+            if (data.id === 'client-count' && data.value !== undefined) {
+                const clientCountElement = document.getElementById('client-count');
+                if (clientCountElement) {
+                    clientCountElement.textContent = data.value;
+                    return text;
+                }
+            }
+
+            // Handle UTC updates
+            if (data.utc) {
+                const targetElement = document.getElementById(data.id);
+                if (targetElement) {
+                    targetElement.textContent = new Date(data.utc).toLocaleTimeString();
+                    targetElement.setAttribute('data-utc', data.utc);
+                    return text;
+                }
+            }
             
-            // Only process messages with control-type
+            // Handle form control updates
             if (data['control-type']) {
-                // Find all form control names in the data (excluding control-type and HEADERS)
                 const controlNames = Object.keys(data).filter(key => 
                     key !== 'control-type' && key !== 'HEADERS'
                 );
@@ -210,7 +182,6 @@ htmx.defineExtension('form-update-handler', {
             }
             return text;
         } catch (e) {
-            // Not valid JSON, just return the original text
             return text;
         }
     }
@@ -221,7 +192,7 @@ htmx.defineExtension('form-update-handler', {
 </script>
 
 <section class="h-full p-8 flex flex-col overflow-hidden"
-         hx-ext="ws,time-converter,ws-debug,ws-connection-status,form-handler,form-update-handler"
+         hx-ext="ws,ws-debug,ws-connection-status,form-handler,form-update-handler"
          ws-connect="/websocket_do">
     <!-- Header Section -->
     <article class="bg-white rounded-lg shadow-sm p-8 space-y-4">
