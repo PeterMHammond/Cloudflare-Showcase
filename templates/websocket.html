@@ -2,158 +2,246 @@
 
 {% block content %}
 <script>
+
+// Define a WebSocket time converter extension for transforming timestamps to local time
 htmx.defineExtension('time-converter', {
-    transformResponse: function(text, xhr, elt) {
+    transformResponse: function (text, xhr, elt) {
         try {
-            // Try to find timestamp in the HTML response
-            const tempDiv = document.createElement('div');
-            tempDiv.innerHTML = text;
-            
-            // Find elements with data-utc attribute
-            const timeElements = tempDiv.querySelectorAll('[data-utc]');
-            timeElements.forEach(el => {
-                const utcTime = el.getAttribute('data-utc');
-                const localTime = new Date(parseInt(utcTime)).toLocaleTimeString();
-                el.textContent = localTime;
-            });
-            
-            return tempDiv.innerHTML;
+            const data = JSON.parse(text);
+            if (data.id) {
+                const targetElement = document.getElementById(data.id);
+                if (targetElement) {
+                    if (data.utc) {
+                        // Handle clock updates
+                        targetElement.textContent = new Date(data.utc).toLocaleTimeString();
+                        targetElement.setAttribute('data-utc', data.utc);
+                    } else if (data.value !== undefined) {
+                        // Handle numeric updates
+                        targetElement.textContent = data.value;
+                    }
+                }
+            }
+            return text;
         } catch (e) {
-            console.error('Error converting time:', e);
+            console.error('Error processing JSON update:', e);
             return text;
         }
     }
 });
 
+// Define a WebSocket debug extension for logging WebSocket events
 htmx.defineExtension('ws-debug', {
-    onEvent: function(name, evt) {
-        function formatMessage(msg) {
+    onEvent: function (name, evt) {
+        const logDiv = document.getElementById('message-log');
+        if (!logDiv) return;
+
+        const ARROWS = {
+            RECEIVED: '📥',  // Up arrow for received messages
+            SENT: '⬆️',      // Down arrow for sent messages
+            SYSTEM: '🔄'     // Diamond for system messages
+        };
+
+        const formatMessage = (msg) => {
             if (typeof msg === 'string') {
                 return msg
+                    .trim()
+                    .replace(/\s{2,}/g, ' ')
+                    .replace(/\n+/g, '\n')
                     .replace(/&/g, '&amp;')
                     .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;')
-                    .replace(/"/g, '&quot;')
-                    .replace(/'/g, '&#039;')
-                    .replace(/\n/g, '<br>')
-                    .replace(/\s/g, '&nbsp;');
-            } else {
-                return JSON.stringify(msg, null, 2);
+                    .replace(/>/g, '&gt;');
             }
+            return JSON.stringify(msg, null, 2);
+        };
+
+        const logEntry = document.createElement('div');
+        const timestamp = new Date().toLocaleTimeString();
+
+        switch(name) {
+            case "htmx:wsConnecting":
+                logEntry.className = 'text-yellow-400 whitespace-pre';
+                logEntry.innerHTML = `[${timestamp}] ${ARROWS.SYSTEM} WebSocket Connecting...`;
+                break;
+            case "htmx:wsOpen":
+                logEntry.className = 'text-green-400 whitespace-pre';
+                logEntry.innerHTML = `[${timestamp}] ${ARROWS.SYSTEM} WebSocket Connected`;
+                break;
+            case "htmx:wsClose":
+                logEntry.className = 'text-red-400 whitespace-pre';
+                logEntry.innerHTML = `[${timestamp}] ${ARROWS.SYSTEM} WebSocket Disconnected`;
+                break;
+            case "htmx:wsBeforeMessage":
+            case "htmx:wsBeforeSend":
+                const message = evt.detail.message;
+                const colorClass = name === "htmx:wsBeforeMessage" ? 'text-blue-400' : 'text-yellow-400';
+                const arrow = name === "htmx:wsBeforeMessage" ? ARROWS.RECEIVED : ARROWS.SENT;
+                logEntry.className = `${colorClass} whitespace-pre`;
+                logEntry.innerHTML = `[${timestamp}] ${arrow} ${name === "htmx:wsBeforeMessage" ? 'Received' : 'Sent'}: ${formatMessage(message)}`;
+                break;
         }
 
-        if (name === "htmx:wsBeforeMessage") {
-            const logDiv = document.getElementById('message-log');
-            if (logDiv) {
-                const message = evt.detail.message;
-                const timestamp = new Date().toLocaleTimeString();
-                const debugEntry = document.createElement('div');
-                debugEntry.className = 'text-blue-400 whitespace-pre';
-                debugEntry.innerHTML = `[${timestamp}] Raw Message Received:<br>${formatMessage(message)}`;
-
-                // Also log the parsed message if it's JSON
-                try {
-                    if (typeof message === 'string') {
-                        const parsed = JSON.parse(message);
-                        const parsedEntry = document.createElement('div');
-                        parsedEntry.className = 'text-blue-200 whitespace-pre pl-4 text-xs';
-                        parsedEntry.innerHTML = `Parsed as:<br>${JSON.stringify(parsed, null, 2)}`;
-                        debugEntry.appendChild(parsedEntry);
-                    }
-                } catch (e) {
-                    // Not JSON, ignore
-                }
-
-                logDiv.appendChild(debugEntry);
-                logDiv.scrollTop = logDiv.scrollHeight;
-            }
-        }
-        if (name === "htmx:wsBeforeSend") {
-            const logDiv = document.getElementById('message-log');
-            if (logDiv) {
-                const message = evt.detail.message;
-                const timestamp = new Date().toLocaleTimeString();
-                const debugEntry = document.createElement('div');
-                debugEntry.className = 'text-yellow-400 whitespace-pre';
-                debugEntry.innerHTML = `[${timestamp}] Raw Message Sent:<br>${formatMessage(message)}`;
-
-                // Also log the parsed message if it's JSON
-                try {
-                    if (typeof message === 'string') {
-                        const parsed = JSON.parse(message);
-                        const parsedEntry = document.createElement('div');
-                        parsedEntry.className = 'text-yellow-200 whitespace-pre pl-4 text-xs';
-                        parsedEntry.innerHTML = `Parsed as:<br>${JSON.stringify(parsed, null, 2)}`;
-                        debugEntry.appendChild(parsedEntry);
-                    }
-                } catch (e) {
-                    // Not JSON, ignore
-                }
-
-                logDiv.appendChild(debugEntry);
-                logDiv.scrollTop = logDiv.scrollHeight;
-            }
+        if (logEntry.innerHTML) {
+            logDiv.appendChild(logEntry);
+            logDiv.scrollTop = logDiv.scrollHeight;
         }
     }
 });
+
+// Handle checkbox events
+htmx.defineExtension('checkbox-handler', {
+    onEvent: function (name, evt) {
+        if (name === "htmx:wsConfigSend") {
+            const form = evt.detail.triggeringEvent.target.closest('form');
+            const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+
+            checkboxes.forEach((checkbox) => {
+                evt.detail.parameters[checkbox.name] = checkbox.checked ? true : false;
+            });
+        }
+    }
+});
+
+// Handle connection status
+htmx.defineExtension("ws-connection-status", {
+    onEvent: function (name, evt) {
+        const connectionStatus = document.getElementById("connection-status");
+        if (!connectionStatus) return;
+
+        // Base classes that should always be present for positioning and shape
+        const baseClasses = "inline-block text-sm font-medium rounded-full px-4 py-1 w-fit";
+
+        switch (name) {
+            case "htmx:wsConnecting":
+                connectionStatus.textContent = "Connecting...";
+                connectionStatus.className = `${baseClasses} bg-yellow-100 text-yellow-600`;
+                break;
+            case "htmx:wsOpen":
+                connectionStatus.textContent = "Connected";
+                connectionStatus.className = `${baseClasses} bg-green-100 text-green-600`;
+                break;
+            case "htmx:wsClose":
+                connectionStatus.textContent = "Disconnected - Reconnecting...";
+                connectionStatus.className = `${baseClasses} bg-red-100 text-red-600`;
+                break;
+        }
+    }
+});
+
+htmx.defineExtension('form-handler', {
+    onEvent: function (name, evt) {
+        if (name === 'htmx:wsConfigSend') {
+            const form = evt.detail.triggeringEvent.target.closest('form');
+            const inputs = form.querySelectorAll('input, select, textarea');
+
+            // Ensure parameters exist
+            evt.detail.parameters = evt.detail.parameters || {};
+
+            // Process each form control
+            inputs.forEach((input) => {
+                // Derive the control type
+                const controlType = input.type || input.tagName.toLowerCase();
+
+                // Process value by input type
+                if (input.type === 'checkbox') {
+                    evt.detail.parameters[input.name] = input.checked ? true : false;
+                } else if (input.type === 'radio') {
+                    if (input.checked) {
+                        evt.detail.parameters[input.name] = input.value;
+                    }
+                } else if (input.tagName.toLowerCase() === 'select') {
+                    evt.detail.parameters[input.name] = input.value;
+                } else if (input.tagName.toLowerCase() === 'textarea' || input.type === 'text' || input.type === 'password') {
+                    evt.detail.parameters[input.name] = input.value;
+                } else {
+                    evt.detail.parameters[input.name] = input.value;
+                }
+
+                // Add control-type metadata separately
+                evt.detail.parameters['control-type'] = controlType;
+            });
+
+            console.log('Final parameters after form-handler processing:', evt.detail.parameters);
+        }
+    }
+});
+
+
+
 </script>
 
-<section class="h-full p-8 flex flex-col overflow-hidden" 
-         hx-ext="ws,time-converter,ws-debug" 
+<section class="h-full p-8 flex flex-col overflow-hidden"
+         hx-ext="ws,time-converter,ws-debug,ws-connection-status,form-handler"
          ws-connect="/websocket_do">
-    <article class="bg-white rounded-lg shadow-sm p-8 space-y-4 flex-none">
-        <header class="text-2xl font-bold text-gray-800">Websocket Events Example</header>
+    <!-- Header Section -->
+    <article class="bg-white rounded-lg shadow-sm p-8 space-y-4">
+        <header class="text-2xl font-bold text-gray-800">WebSocket Events Showcase</header>
+        <!-- Connection Status -->
         <aside id="connection-status" 
-               class="inline-block text-sm font-medium rounded-full px-4 py-1"
-               ws-connected="this.classList.add('bg-green-100', 'text-green-600'); this.textContent='Connected'"
-               ws-disconnected="this.classList.remove('bg-green-100', 'text-green-600'); this.classList.add('bg-red-100', 'text-red-600'); this.textContent='Disconnected'">
-            Connecting...
+               class="inline-block text-sm font-medium rounded-full px-4 py-1 w-fit bg-red-100 text-red-600">
+            Disconnected
         </aside>
-        <section class="flex items-start space-x-4">
-            <time class="inline-block text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner h-[100px] flex flex-col items-center justify-center">
-                <header class="font-semibold text-sm">Clock Event</header>
-                <p id="clock-display" 
-                   class="text-4xl font-bold">--:--:--</p>
-            </time>
-            
-            <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
-                <header class="font-semibold text-sm">Connected Clients</header>
-                <p id="client-count" 
-                   class="text-4xl font-bold">0</p>
-            </section>
-            
-            <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
-                <header class="font-semibold text-sm">Shared Checkbox</header>
-                <div id="shared-checkbox-container">
-                    <form ws-send hx-trigger="change from:input">
-                        <label class="flex items-center space-x-2 mt-2">
-                            <input type="checkbox" 
-                                   id="shared-checkbox"
-                                   name="checkbox-state"
-                                   class="w-6 h-6 rounded">
-                        </label>
-                    </form>
-                </div>
-            </section>
-            
-            <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
-                <header class="font-semibold text-sm">Shared Input</header>
-                <form ws-send>
-                    <input type="text" 
-                           id="shared-input"
-                           name="input-text"
-                           class="mt-2 px-4 py-2 border rounded-lg text-lg text-center" 
-                           placeholder="Type here..."
-                           hx-trigger="keyup changed delay:200ms">
-                </form>
-            </section>
-        </section>
     </article>
 
-    <article class="flex-1 bg-white rounded-lg shadow-sm p-8 mt-4 flex flex-col overflow-hidden">
-        <header class="text-lg font-semibold text-gray-800 mb-4 flex-none">Debug Log</header>
-        <section id="message-log" 
-                 class="flex-1 min-h-0 max-h-[300px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto space-y-1">
+    <!-- Real-Time Data Section -->
+    <section class="flex items-start space-x-4">
+        <!-- Real-Time Clock -->
+        <time class="inline-block text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner h-[100px] flex flex-col items-center justify-center">
+            <header class="font-semibold text-sm">Clock Event</header>
+            <p id="clock-display" class="text-4xl font-bold">--:--:-- --</p>
+        </time>
+
+        <!-- Connected Clients -->
+        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
+            <header class="font-semibold text-sm">Connected Clients</header>
+            <p id="client-count" class="text-4xl font-bold">0</p>
+        </section>
+
+        <!-- Shared Checkbox -->
+        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
+            <header class="font-semibold text-sm">Shared Checkbox</header>
+            <div id="shared-checkbox-container">
+                <form ws-send="changed" hx-trigger="change from:input" hx-target="#shared-checkbox-container">
+                    <input type="checkbox" 
+                           name="example-12345" 
+                           id="example-12345" 
+                           class="w-6 h-6 rounded">
+                </form>
+                
+            
+                
+            </div>
+        </section>   
+
+        <!-- Shared Input -->
+        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
+            <header class="font-semibold text-sm">Shared Input</header>
+            
+            <form onsubmit="return false;">
+                <!-- <input type="text" 
+                       name="input-text-1" 
+                       ws-send="keyup" 
+                       hx-trigger="keyup delay:300ms" 
+                       hx-target="this"
+                       class="mt-2 px-4 py-2 border rounded-lg text-lg text-left"
+                       placeholder="Type here..."> -->
+                <textarea 
+                       name="multi-row-text-1" 
+                       ws-send="keyup" 
+                       hx-trigger="keyup delay:300ms" 
+                       hx-target="this"
+                       class="mt-2 px-4 py-2 border rounded-lg text-lg text-left textarea-auto-resize"
+                       rows="1" 
+                       placeholder="Type here..."></textarea>
+                       
+            </form>                                
+        </section>
+    </section>
+
+    <!-- Debug Log Section -->
+    <article class="flex-1 bg-white rounded-lg shadow-sm p-8 mt-4">
+        <header class="text-lg font-semibold text-gray-800 mb-4">Debug Log</header>
+        <section id="message-log"
+                 class="flex-1 min-h-0 max-h-[300px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto">
         </section>
     </article>
 </section>
