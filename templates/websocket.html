@@ -23,7 +23,7 @@ htmx.defineExtension('time-converter', {
             }
             return text;
         } catch (e) {
-            console.error('Error processing JSON update:', e);
+            // Not valid JSON, just return the original text
             return text;
         }
     }
@@ -194,10 +194,9 @@ htmx.defineExtension('form-update-handler', {
                     }
                 });
             }
-            
             return text;
         } catch (e) {
-            console.error('Error processing form update:', e);
+            // Not valid JSON, just return the original text
             return text;
         }
     }
