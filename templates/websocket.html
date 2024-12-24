@@ -31,59 +31,73 @@ htmx.defineExtension('time-converter', {
 
 // Define a WebSocket debug extension for logging WebSocket events
 htmx.defineExtension('ws-debug', {
-    onEvent: function (name, evt) {
+    onEvent: function(name, evt) {
+        switch(name) {
+            case 'htmx:wsBeforeMessage':
+                this.logMessage(evt.detail.message, 'RECEIVED');
+                break;
+            case 'htmx:wsBeforeSend':
+                this.logMessage(evt.detail.message, 'SENT');
+                break;
+            case 'htmx:wsOpen':
+                this.logMessage('WebSocket Connected', 'CONNECT');
+                break;
+            case 'htmx:wsClose':
+                this.logMessage('WebSocket Disconnected', 'DISCONNECT');
+                break;
+            case 'htmx:wsError':
+                this.logMessage('WebSocket Error', 'ERROR');
+                break;
+        }
+    },
+    logMessage: function(msg, direction) {
         const logDiv = document.getElementById('message-log');
         if (!logDiv) return;
 
-        const ARROWS = {
-            RECEIVED: '📥',  // Up arrow for received messages
-            SENT: '⬆️',      // Down arrow for sent messages
-            SYSTEM: '🔄'     // Diamond for system messages
-        };
+        const MAX_MESSAGES = 100;
+        
+        while (logDiv.children.length >= MAX_MESSAGES) {
+            logDiv.removeChild(logDiv.firstChild);
+        }
 
-        const formatMessage = (msg) => {
-            if (typeof msg === 'string') {
-                return msg
-                    .trim()
-                    .replace(/\s{2,}/g, ' ')
-                    .replace(/\n+/g, '\n')
-                    .replace(/&/g, '&amp;')
-                    .replace(/</g, '&lt;')
-                    .replace(/>/g, '&gt;');
-            }
-            return JSON.stringify(msg, null, 2);
+        const ARROWS = {
+            RECEIVED: '📥',
+            SENT: '⬆️',
+            CONNECT: '🔄',
+            DISCONNECT: '🔴',
+            ERROR: '⚠️'
         };
 
         const logEntry = document.createElement('div');
         const timestamp = new Date().toLocaleTimeString();
-
-        switch(name) {
-            case "htmx:wsConnecting":
-                logEntry.className = 'text-yellow-400 whitespace-pre';
-                logEntry.innerHTML = `[${timestamp}] ${ARROWS.SYSTEM} WebSocket Connecting...`;
-                break;
-            case "htmx:wsOpen":
-                logEntry.className = 'text-green-400 whitespace-pre';
-                logEntry.innerHTML = `[${timestamp}] ${ARROWS.SYSTEM} WebSocket Connected`;
-                break;
-            case "htmx:wsClose":
-                logEntry.className = 'text-red-400 whitespace-pre';
-                logEntry.innerHTML = `[${timestamp}] ${ARROWS.SYSTEM} WebSocket Disconnected`;
-                break;
-            case "htmx:wsBeforeMessage":
-            case "htmx:wsBeforeSend":
-                const message = evt.detail.message;
-                const colorClass = name === "htmx:wsBeforeMessage" ? 'text-blue-400' : 'text-yellow-400';
-                const arrow = name === "htmx:wsBeforeMessage" ? ARROWS.RECEIVED : ARROWS.SENT;
-                logEntry.className = `${colorClass} whitespace-pre`;
-                logEntry.innerHTML = `[${timestamp}] ${arrow} ${name === "htmx:wsBeforeMessage" ? 'Received' : 'Sent'}: ${formatMessage(message)}`;
-                break;
+        
+        let msgType = '';
+        try {
+            JSON.parse(msg);
+            msgType = '{json} ';
+        } catch (e) {
+            msgType = '&lt;html&gt; ';
         }
 
-        if (logEntry.innerHTML) {
-            logDiv.appendChild(logEntry);
-            logDiv.scrollTop = logDiv.scrollHeight;
-        }
+        logEntry.className = `whitespace-pre ${
+            direction === 'ERROR' ? 'text-red-400' :
+            direction === 'CONNECT' ? 'text-yellow-400' :
+            direction === 'DISCONNECT' ? 'text-yellow-400' :
+            direction === 'RECEIVED' ? 'text-blue-400' : 
+            'text-green-400'
+        }`;
+        
+        const formattedMsg = msg.trim()
+            .replace(/\s{2,}/g, ' ')
+            .replace(/\n+/g, '\n')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        logEntry.innerHTML = `[${timestamp}] ${ARROWS[direction]} ${msgType} ${formattedMsg}`;
+        
+        logDiv.appendChild(logEntry);
+        logDiv.scrollTop = logDiv.scrollHeight;
     }
 });
 

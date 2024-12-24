@@ -70,7 +70,6 @@ impl DurableObject for WebsocketDO {
                 let client_id_clone = client_id.clone();
                 let shared = Arc::clone(&self.shared);
 
-                // Handle client messages
                 wasm_bindgen_futures::spawn_local(async move {
                     let mut event_stream = server_clone.events().expect("Failed to get event stream");
                     
@@ -80,13 +79,13 @@ impl DurableObject for WebsocketDO {
                                 if let Some(text) = msg.text() {
                                     console_log!("📥 {} Received: {}", Date::now().to_string(), text);
                                     
-                                    if let Ok(data) = serde_json::from_str::<Value>(&text) {
+                                    if let Ok(message) = serde_json::from_str::<Value>(&text) {
                                         let shared = shared.lock().unwrap();
-                                        // Broadcast the received JSON to all other clients
-                                        for client in &shared.clients {
-                                            if client.id != client_id_clone {
-                                                let _ = client.socket.send_with_str(&text);
-                                            }
+                                        let other_clients = shared.clients.iter()
+                                            .filter(|client| client.id != client_id_clone);
+                                            
+                                        for client in other_clients {
+                                            let _ = client.socket.send_with_str(&text);
                                         }
                                     }
                                 }
@@ -96,15 +95,6 @@ impl DurableObject for WebsocketDO {
                                 shared.clients.retain(|c| c.id != client_id_clone);
                                 
                                 let time = Date::now().as_millis();
-                                let disconnect_msg = format!(r#"
-                                    <div id="message-log" hx-swap-oob="beforeend">
-                                        <div class="text-yellow-500"><span data-utc="{}"></span> Client disconnected</div>
-                                    </div>
-                                "#, time);
-                                
-                                for client in &shared.clients {
-                                    let _ = client.socket.send_with_str(&disconnect_msg);
-                                }
                                 shared.broadcast_client_count(time);
                                 break;
                             },
@@ -128,17 +118,6 @@ impl DurableObject for WebsocketDO {
                         socket: server.clone(),
                     });
 
-                    let connect_msg = format!(r#"
-                        <div id="message-log" hx-swap-oob="beforeend">
-                            <div class="text-yellow-500"><span data-utc="{}"></span> Client connected</div>
-                        </div>
-                    "#, now);
-                    
-                    for client in &shared.clients {
-                        if client.id != client_id {
-                            let _ = client.socket.send_with_str(&connect_msg);
-                        }
-                    }
                     shared.broadcast_client_count(now);
 
                     !shared.clock_started
