@@ -165,12 +165,50 @@ htmx.defineExtension('form-handler', {
     }
 });
 
+// Define a WebSocket form update handler extension
+htmx.defineExtension('form-update-handler', {
+    transformResponse: function (text, xhr, elt) {
+        try {
+            const data = JSON.parse(text);
+            
+            // Only process messages with control-type
+            if (data['control-type']) {
+                // Find all form control names in the data (excluding control-type and HEADERS)
+                const controlNames = Object.keys(data).filter(key => 
+                    key !== 'control-type' && key !== 'HEADERS'
+                );
+
+                controlNames.forEach(name => {
+                    const element = document.getElementById(name) || 
+                                  document.querySelector(`[name="${name}"]`);
+                    if (element) {
+                        switch (data['control-type']) {
+                            case 'checkbox':
+                                element.checked = data[name];
+                                break;
+                            case 'textarea':
+                                element.value = data[name];
+                                break;
+                            // Add more control types as needed
+                        }
+                    }
+                });
+            }
+            
+            return text;
+        } catch (e) {
+            console.error('Error processing form update:', e);
+            return text;
+        }
+    }
+});
+
 
 
 </script>
 
 <section class="h-full p-8 flex flex-col overflow-hidden"
-         hx-ext="ws,time-converter,ws-debug,ws-connection-status,form-handler"
+         hx-ext="ws,time-converter,ws-debug,ws-connection-status,form-handler,form-update-handler"
          ws-connect="/websocket_do">
     <!-- Header Section -->
     <article class="bg-white rounded-lg shadow-sm p-8 space-y-4">
