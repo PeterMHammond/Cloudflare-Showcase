@@ -2,6 +2,7 @@ use worker::*;
 use routes::{
     about::handler as about,
     index::handler as index,
+    favicon::handler as favicon,
     websocket_do::handler as websocket_do,
     websocket::websocket::handler as websocket,
 };
@@ -10,6 +11,7 @@ mod template;
 mod routes {
     pub mod about;
     pub mod index;
+    pub mod favicon;
     pub mod websocket;
     pub mod websocket_do;
 }
@@ -22,6 +24,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
 
     let response = router
         .get_async("/", index)
+        .get_async("/favicon.ico", favicon)
         .get_async("/about", about)
         .get_async("/websocket_do", websocket_do)
         .get_async("/websocket", websocket)

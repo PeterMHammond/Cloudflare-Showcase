@@ -26,15 +26,17 @@ pub struct WebsocketDO {
 }
 
 impl WebsocketDO {
-    async fn broadcast_client_count(&self) -> Result<()> {
-        let count = self.state.storage().get::<i32>("client_count").await.unwrap_or(0);
-        
+    async fn broadcast_client_count(&self, count: usize) -> Result<()> {        
+        let web_socket_conns = self.state.get_websockets();
+        if web_socket_conns.is_empty() {
+            return Ok(());
+        }
+
         let count_json = serde_json::json!({
             "id": "client-count",
             "value": count
         });
 
-        let web_socket_conns = self.state.get_websockets();
         for conn in web_socket_conns {
             let _ = conn.send(&count_json);
         }
@@ -86,15 +88,14 @@ impl DurableObject for WebsocketDO {
         let pair = WebSocketPair::new()?;
         let server = pair.server;
         let client = pair.client;
-
         self.state.accept_web_socket(&server);
 
-        let current_client_count = self.state.storage().get::<i32>("client_count").await.unwrap_or(0);
-        if current_client_count == 0 {
+        let web_socket_conns = self.state.get_websockets();
+        console_log!("web_socket_conns: {:?}", web_socket_conns.len());
+        if web_socket_conns.len() == 1 {
             self.state.storage().set_alarm(Duration::from_secs(5)).await?;
         }
-        self.state.storage().put("client_count", current_client_count + 1).await?;
-        self.broadcast_client_count().await?;
+        self.broadcast_client_count(web_socket_conns.len()).await?;
 
         let opts = ListOptions::new().prefix("control:");
         let keys_map = self.state.storage().list_with_options(opts).await.unwrap();        
@@ -134,21 +135,17 @@ impl DurableObject for WebsocketDO {
     }
 
     async fn websocket_close(&mut self, _ws: WebSocket, _code: usize, _reason: String, _was_clean: bool) -> Result<()> {
-        let current_client_count = self.state.storage().get::<i32>("client_count").await.unwrap_or(0);
-        if current_client_count > 0 {
-            self.state.storage().put("client_count", current_client_count - 1).await?;
-        }
-        self.broadcast_client_count().await?;
+        
+        let web_socket_conns = self.state.get_websockets();
+        self.broadcast_client_count(web_socket_conns.len() - 1).await?;
         Ok(())
     }
 
     async fn alarm(&mut self) -> Result<Response> {
-        // Broadcast time to all connected clients
         self.broadcast_time().await?;
         
-        // Schedule the next alarm if we still have clients
-        let current_client_count = self.state.storage().get::<i32>("client_count").await.unwrap_or(0);
-        if current_client_count > 0 {
+        let web_socket_conns = self.state.get_websockets();
+        if !web_socket_conns.is_empty() {
             self.schedule_next_alarm().await?;
         }
         
