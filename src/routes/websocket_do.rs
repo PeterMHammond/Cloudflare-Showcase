@@ -27,7 +27,7 @@ pub struct WebsocketDO {
 
 impl WebsocketDO {
     async fn broadcast_client_count(&self) -> Result<()> {
-        let count = self.state.storage().get::<i32>("connected_users").await.unwrap_or(0);
+        let count = self.state.storage().get::<i32>("client_count").await.unwrap_or(0);
         
         let count_json = serde_json::json!({
             "id": "client-count",
@@ -74,16 +74,11 @@ impl DurableObject for WebsocketDO {
     }
 
     async fn fetch(&mut self, req: Request) -> Result<Response> {
-        // let url = req.url()?;
-
-        
         if !self.is_new {
-            let delete_result = self.state.storage().delete_all().await?;
-            console_log!("Delete result: {:?}", delete_result);
-            self.state.storage().set_alarm(Duration::from_secs(5)).await?;
             self.is_new = true;
+            let _ = self.state.storage().delete_all().await?;
         }
-        // Handle WebSocket upgrade
+
         if !req.headers().get("Upgrade")?.map_or(false, |v| v.eq_ignore_ascii_case("websocket")) {
             return Response::error("Expected Upgrade: websocket", 426);
         }
@@ -92,23 +87,21 @@ impl DurableObject for WebsocketDO {
         let server = pair.server;
         let client = pair.client;
 
-        // Accept the WebSocket connection and store it in the Durable Object's state
         self.state.accept_web_socket(&server);
 
-        // Update connected users count
-        let current_connections = self.state.storage().get::<i32>("connected_users").await.unwrap_or(0);
-        self.state.storage().put("connected_users", current_connections + 1).await?;
-
+        let current_client_count = self.state.storage().get::<i32>("client_count").await.unwrap_or(0);
+        if current_client_count == 0 {
+            self.state.storage().set_alarm(Duration::from_secs(5)).await?;
+        }
+        self.state.storage().put("client_count", current_client_count + 1).await?;
+        self.broadcast_client_count().await?;
 
         let opts = ListOptions::new().prefix("control:");
-        let keys_map = self.state.storage().list_with_options(opts).await.unwrap();
-        
+        let keys_map = self.state.storage().list_with_options(opts).await.unwrap();        
         for key_str in keys_map.keys().into_iter().map(|k| k.unwrap().as_string().unwrap()) {
             let _ = self.state.storage().get::<ControlMessage>(&key_str).await
                 .and_then(|control_message| server.send(&control_message));
         }                
-
-        self.broadcast_client_count().await?;
 
         Response::from_websocket(client)
     }
@@ -141,9 +134,9 @@ impl DurableObject for WebsocketDO {
     }
 
     async fn websocket_close(&mut self, _ws: WebSocket, _code: usize, _reason: String, _was_clean: bool) -> Result<()> {
-        let current_connections = self.state.storage().get::<i32>("connected_users").await.unwrap_or(0);
-        if current_connections > 0 {
-            self.state.storage().put("connected_users", current_connections - 1).await?;
+        let current_client_count = self.state.storage().get::<i32>("client_count").await.unwrap_or(0);
+        if current_client_count > 0 {
+            self.state.storage().put("client_count", current_client_count - 1).await?;
         }
         self.broadcast_client_count().await?;
         Ok(())
@@ -154,8 +147,8 @@ impl DurableObject for WebsocketDO {
         self.broadcast_time().await?;
         
         // Schedule the next alarm if we still have clients
-        let current_connections = self.state.storage().get::<i32>("connected_users").await.unwrap_or(0);
-        if current_connections > 0 {
+        let current_client_count = self.state.storage().get::<i32>("client_count").await.unwrap_or(0);
+        if current_client_count > 0 {
             self.schedule_next_alarm().await?;
         }
         

@@ -4,7 +4,7 @@ use crate::template::{BaseTemplate, DefaultBaseTemplate};
 
 #[derive(Template)]
 #[template(path = "index.html")]
-struct IndexTemplate {
+pub struct IndexTemplate {
     inner: DefaultBaseTemplate,
 }
 

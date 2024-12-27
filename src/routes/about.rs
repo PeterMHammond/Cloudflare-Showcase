@@ -21,6 +21,8 @@ pub async fn handler(req: Request, _ctx: RouteContext<()>) -> Result<Response> {
         License: {license}\n\
         Current Route: {url}\n\n\
         Available Routes:\n\
+        - GET /\n    Dashboard/Home page\n    Example: curl -X GET {root_url}\n\
+        - GET /websocket\n    WebSocket demonstration page\n    Example: curl -X GET {root_url}websocket\n\
         - GET /about\n    Shows this diagnostic information\n    Example: curl -X GET {root_url}about\n"
     );
 
