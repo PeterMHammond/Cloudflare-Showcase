@@ -6,6 +6,9 @@ compatibility_flags = ["durable_object_alarms"]
 [build]
 command = "cargo install -q worker-build && worker-build --release"
 
+[observability]
+enabled = true
+
 [[durable_objects.bindings]]
 name = "WebsocketDO"
 class_name = "WebsocketDO"
