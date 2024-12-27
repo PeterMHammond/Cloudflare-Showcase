@@ -104,30 +104,15 @@ htmx.defineExtension("ws-connection-status", {
 htmx.defineExtension('form-handler', {
     onEvent: function (name, evt) {
         if (name === 'htmx:wsConfigSend') {
+            evt.detail.parameters = {};
             const form = evt.detail.triggeringEvent.target.closest('form');
             const inputs = form.querySelectorAll('input, select, textarea');
-            
-            evt.detail.parameters = evt.detail.parameters || {};
-
-            const valueGetters = {
-                checkbox: input => input.checked,
-                radio: input => input.checked ? input.value : undefined,
-                select: input => input.value,
-                textarea: input => input.value,
-                text: input => input.value,
-                password: input => input.value,
-                default: input => input.value
-            };
-
             inputs.forEach((input) => {
                 const controlType = input.type || input.tagName.toLowerCase();
-                const getValue = valueGetters[controlType] || valueGetters.default;
-                const value = getValue(input);
-                
-                if (value !== undefined) {
-                    evt.detail.parameters[input.name] = value;
-                }
-                evt.detail.parameters['control-type'] = controlType;
+                let value = controlType === 'checkbox' ? input.checked : input.value;
+                evt.detail.parameters['control_name'] = input.name;
+                evt.detail.parameters['control_value'] = value;
+                evt.detail.parameters['control_type'] = controlType;
             });
         }
     }
@@ -149,8 +134,8 @@ htmx.defineExtension('form-update-handler', {
             }
 
             // Handle UTC updates
-            if (data.utc) {
-                const targetElement = document.getElementById(data.id);
+            if (data.id === 'clock-display' && data.utc) {
+                const targetElement = document.getElementById('clock-display');
                 if (targetElement) {
                     targetElement.textContent = new Date(data.utc).toLocaleTimeString();
                     targetElement.setAttribute('data-utc', data.utc);
@@ -159,29 +144,26 @@ htmx.defineExtension('form-update-handler', {
             }
             
             // Handle form control updates
-            if (data['control-type']) {
-                const controlNames = Object.keys(data).filter(key => 
-                    key !== 'control-type' && key !== 'HEADERS'
-                );
-
-                controlNames.forEach(name => {
-                    const element = document.getElementById(name) || 
-                                  document.querySelector(`[name="${name}"]`);
-                    if (element) {
-                        switch (data['control-type']) {
-                            case 'checkbox':
-                                element.checked = data[name];
-                                break;
-                            case 'textarea':
-                                element.value = data[name];
-                                break;
-                            // Add more control types as needed
-                        }
+            if (data['control_type'] && data['control_name'] && data['control_value'] !== undefined) {
+                const element = document.getElementById(data['control_name']) || 
+                              document.querySelector(`[name="${data['control_name']}"]`);
+                
+                if (element) {
+                    switch (data['control_type']) {
+                        case 'checkbox':
+                            element.checked = data['control_value'];
+                            break;
+                        case 'textarea':
+                        case 'text':
+                            element.value = data['control_value'];
+                            break;
                     }
-                });
+                }
             }
+            
             return text;
         } catch (e) {
+            console.error('Error processing WebSocket message:', e);
             return text;
         }
     }
@@ -196,7 +178,7 @@ htmx.defineExtension('form-update-handler', {
          ws-connect="/websocket_do">
     <!-- Header Section -->
     <article class="bg-white rounded-lg shadow-sm p-8 space-y-4">
-        <header class="text-2xl font-bold text-gray-800">WebSocket Events Showcase</header>
+        <header class="text-2xl font-bold text-gray-800">Durable Object WebSocket Events Demo</header>
         <!-- Connection Status -->
         <aside id="connection-status" 
                class="inline-block text-sm font-medium rounded-full px-4 py-1 w-fit bg-red-100 text-red-600">
