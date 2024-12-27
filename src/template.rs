@@ -28,4 +28,17 @@ impl BaseTemplate for DefaultBaseTemplate {
     fn page_title(&self) -> &str { &self.page_title }
     fn current_year(&self) -> &str { &self.current_year }
     fn version(&self) -> &str { &self.version }
+}
+
+use askama::Template;
+
+#[derive(Template)]
+#[template(path = "study.html")]
+pub struct StudyTemplate {}
+
+impl BaseTemplate for StudyTemplate {
+    fn title(&self) -> &str { "Study - Cloudflare Showcase" }
+    fn page_title(&self) -> &str { "Study" }
+    fn current_year(&self) -> &str { "2024" }
+    fn version(&self) -> &str { option_env!("CARGO_PKG_VERSION").unwrap_or_default() }
 } 

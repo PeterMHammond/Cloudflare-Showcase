@@ -13,6 +13,10 @@ enabled = true
 name = "WebsocketDO"
 class_name = "WebsocketDO"
 
+[[durable_objects.bindings]]
+name = "StudyDO"
+class_name = "StudyDO"
+
 [[migrations]]
 tag = "v1"
-new_classes = ["WebsocketDO"]
+new_classes = ["WebsocketDO", "StudyDO"]

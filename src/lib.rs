@@ -5,6 +5,8 @@ use routes::{
     favicon::handler as favicon,
     websocket_do::handler as websocket_do,
     websocket::websocket::handler as websocket,
+    study::handler as study,
+    study_do::handler as study_do,
 };
 
 mod template;
@@ -14,6 +16,8 @@ mod routes {
     pub mod favicon;
     pub mod websocket;
     pub mod websocket_do;
+    pub mod study;
+    pub mod study_do;
 }
 
 #[event(fetch)]
@@ -28,6 +32,8 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/about", about)
         .get_async("/websocket_do", websocket_do)
         .get_async("/websocket", websocket)
+        .get_async("/study", study)
+        .get_async("/study_do", study_do)
         .run(req, env)
         .await?;
 

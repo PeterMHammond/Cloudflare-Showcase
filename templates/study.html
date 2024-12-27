@@ -1,0 +1,322 @@
+{% extends "base.html" %}
+
+{% block title %}Study - Cloudflare Showcase{% endblock %}
+
+{% block content %}
+<style>
+#scripture-tabs,
+#tab-content {
+    display: none;
+    width: 100%;
+}
+</style>
+
+<script>
+// Handle connection status
+htmx.defineExtension("ws-connection-status", {
+    onEvent: function (name, evt) {
+        const connectionStatus = document.getElementById("connection-status");
+        if (!connectionStatus) return;
+
+        const baseClasses = "inline-block text-sm font-medium rounded-full px-4 py-1 w-fit";
+
+        switch (name) {
+            case "htmx:wsConnecting":
+                connectionStatus.textContent = "Connecting...";
+                connectionStatus.className = `${baseClasses} bg-yellow-100 text-yellow-600`;
+                break;
+            case "htmx:wsOpen":
+                connectionStatus.textContent = "Connected";
+                connectionStatus.className = `${baseClasses} bg-green-100 text-green-600`;
+                break;
+            case "htmx:wsClose":
+                connectionStatus.textContent = "Disconnected - Reconnecting...";
+                connectionStatus.className = `${baseClasses} bg-red-100 text-red-600`;
+                break;
+        }
+    }
+});
+
+// Debug logging extension
+htmx.defineExtension('ws-debug', {
+    onEvent: function(name, evt) {
+        switch(name) {
+            case 'htmx:wsBeforeMessage':
+                this.logMessage(evt.detail.message, 'RECEIVED');
+                break;
+            case 'htmx:wsBeforeSend':
+                this.logMessage(evt.detail.message, 'SENT');
+                break;
+            case 'htmx:wsOpen':
+                this.logMessage('WebSocket Connected', 'CONNECT');
+                break;
+            case 'htmx:wsClose':
+                this.logMessage('WebSocket Disconnected', 'DISCONNECT');
+                break;
+            case 'htmx:wsError':
+                this.logMessage('WebSocket Error', 'ERROR');
+                break;
+        }
+    },
+    logMessage: function(msg, direction) {
+        const logDiv = document.getElementById('message-log');
+        if (!logDiv) return;
+
+        const MAX_MESSAGES = 100;
+        
+        while (logDiv.children.length >= MAX_MESSAGES) {
+            logDiv.removeChild(logDiv.firstChild);
+        }
+
+        const ARROWS = {
+            RECEIVED: '📥',
+            SENT: '⬆️',
+            CONNECT: '🔄',
+            DISCONNECT: '🔴',
+            ERROR: '⚠️'
+        };
+
+        const logEntry = document.createElement('div');
+        const timestamp = new Date().toLocaleTimeString();
+        
+        let msgType = '';
+        try {
+            JSON.parse(msg);
+            msgType = '{json} ';
+        } catch (e) {
+            msgType = '&lt;html&gt; ';
+        }
+
+        logEntry.className = `whitespace-pre ${
+            direction === 'ERROR' ? 'text-red-400' :
+            direction === 'CONNECT' ? 'text-yellow-400' :
+            direction === 'DISCONNECT' ? 'text-yellow-400' :
+            direction === 'RECEIVED' ? 'text-blue-400' : 
+            'text-green-400'
+        }`;
+        
+        const formattedMsg = msg.trim()
+            .replace(/\s{2,}/g, ' ')
+            .replace(/\n+/g, '\n')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        logEntry.innerHTML = `[${timestamp}] ${ARROWS[direction]} ${msgType} ${formattedMsg}`;
+        
+        logDiv.appendChild(logEntry);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+});
+
+htmx.defineExtension('form-handler', {
+    onEvent: function (name, evt) {
+        if (name === 'htmx:wsConfigSend') {
+            evt.detail.parameters = {};
+            const form = evt.detail.triggeringEvent.target.closest('form');
+            const inputs = form.querySelectorAll('input, select, textarea');
+            inputs.forEach((input) => {
+                const controlType = input.type || input.tagName.toLowerCase();
+                let value = controlType === 'checkbox' ? input.checked : input.value;
+                evt.detail.parameters['control_name'] = input.name;
+                evt.detail.parameters['control_value'] = value;
+                evt.detail.parameters['control_type'] = controlType;
+
+                // Immediately update tabs for local client if this is the scriptures field
+                if (input.name === 'scriptures') {
+                    updateScriptureTabs(value);
+                }
+            });
+
+            return {
+                value: JSON.stringify(evt.detail.parameters)
+            };
+        }
+    }
+});
+
+htmx.defineExtension('form-update-handler', {
+    transformResponse: function (text, xhr, elt) {
+        try {
+            let data;
+            if (xhr && xhr.responseText) {
+                // Local form submission - already handled by form-handler
+                const response = JSON.parse(xhr.responseText);
+                data = response.value ? JSON.parse(response.value) : response;
+            } else {
+                // WebSocket message from remote client
+                data = JSON.parse(text);
+                if (data.control_name === 'scriptures') {
+                    updateScriptureTabs(data.control_value);
+                }
+            }
+
+            if (data.id === 'client-count') {
+                const clientCount = document.getElementById('client-count');
+                if (clientCount) {
+                    clientCount.textContent = data.value;
+                }
+                const connectionStatus = document.getElementById("connection-status");
+                if (connectionStatus && connectionStatus.classList.contains('bg-green-100')) {
+                    connectionStatus.textContent = `${data.value} Participants`;
+                }
+            } else if (data.control_type && data.control_name && data.control_value !== undefined) {
+                const element = document.getElementById(data.control_name) || 
+                              document.querySelector(`[name="${data.control_name}"]`);
+                if (element) {
+                    element.value = data.control_value;
+                }
+            }
+            return text;
+        } catch (e) {
+            console.error('Error processing message:', e);
+            return text;
+        }
+    }
+});
+
+// Function to update scripture tabs
+function updateScriptureTabs(content) {
+    const tabsContainer = document.getElementById('scripture-tabs');
+    const tabContentContainer = document.getElementById('tab-content');
+    if (!tabsContainer || !tabContentContainer) return;
+
+    // Clear existing tabs and content
+    tabsContainer.innerHTML = '';
+    tabContentContainer.innerHTML = '';
+
+    // Split content into lines and create tabs
+    const scriptures = content.split('\n').filter(line => line.trim());
+    
+    // Create tab container with width constraint
+    const tabList = document.createElement('div');
+    tabList.className = 'flex flex-wrap gap-2 w-full';
+    
+    scriptures.forEach((scripture, index) => {
+        // Create tab
+        const tab = document.createElement('button');
+        tab.className = `px-4 py-2 font-medium rounded-t-lg ${index === 0 ? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`;
+        tab.textContent = scripture;
+        tab.onclick = () => switchTab(index);
+        tabList.appendChild(tab);
+
+        // Create tab content
+        const tabContent = document.createElement('div');
+        tabContent.className = `bg-white p-4 rounded-lg ${index === 0 ? '' : 'hidden'}`;
+        tabContent.id = `tab-${index}`;
+        
+        // Add content for the scripture
+        const tabForm = document.createElement('form');
+        tabForm.innerHTML = `
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700">Notes for ${scripture}</label>
+                <textarea name="control-${index}"
+                          rows="4"
+                          ws-send="keyup"
+                          hx-trigger="keyup delay:300ms"
+                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
+            </div>
+        `;
+        tabContent.appendChild(tabForm);
+        tabContentContainer.appendChild(tabContent);
+    });
+
+    // Add the tab list to the container
+    tabsContainer.appendChild(tabList);
+
+    // Make containers visible
+    tabsContainer.style.display = "block";
+    tabContentContainer.style.display = "block";
+
+    // Force reflow to fix layout
+    tabsContainer.offsetWidth;
+}
+
+// Add resize listener for dynamic handling
+window.addEventListener('resize', () => {
+    const tabsContainer = document.getElementById('scripture-tabs');
+    const tabContentContainer = document.getElementById('tab-content');
+    if (tabsContainer && tabContentContainer) {
+        tabsContainer.style.width = "100%";
+        tabContentContainer.style.width = "100%";
+    }
+});
+
+function switchTab(index) {
+    // Update tab styles
+    const tabs = document.getElementById('scripture-tabs').children;
+    Array.from(tabs).forEach((tab, i) => {
+        tab.className = `px-4 py-2 font-medium rounded-t-lg ${i === index ? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`;
+    });
+
+    // Show selected tab content
+    const contents = document.getElementById('tab-content').children;
+    Array.from(contents).forEach((content, i) => {
+        content.className = `bg-white p-4 rounded-lg ${i === index ? '' : 'hidden'}`;
+    });
+}
+</script>
+
+<div class="h-screen flex flex-col p-4 overflow-hidden" 
+     hx-ext="ws,ws-connection-status,form-handler,form-update-handler,ws-debug"
+     ws-connect="/study_do">
+    <!-- Header -->
+    <div class="bg-white rounded-lg shadow-sm p-4 mb-4 flex-none">
+        <div class="flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-gray-800">Study Session</h1>
+            <aside id="connection-status" 
+                   class="inline-block text-sm font-medium rounded-full px-4 py-1 w-fit bg-red-100 text-red-600">
+                Disconnected
+            </aside>
+            <span id="client-count" class="hidden">0</span>
+        </div>
+    </div>
+
+    <!-- Main Content Area - Scrollable -->
+    <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
+        <div class="bg-gray-50 p-6 rounded-lg flex-1 flex flex-col overflow-hidden">
+            <!-- Fixed Height Input Section -->
+            <div class="flex-none">
+                <!-- Topic Input -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700">Topic</label>
+                    <form ws-send="keyup" hx-trigger="keyup delay:300ms" hx-target="this" onsubmit="return false;">
+                        <input type="text" 
+                               name="study-topic" 
+                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </form>
+                </div>
+
+                <!-- Scriptures Input -->
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700">Scriptures</label>
+                    <form ws-send="keyup" hx-trigger="keyup delay:300ms" hx-target="this" onsubmit="return false;">
+                        <textarea name="scriptures"
+                                  rows="4"
+                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                  placeholder="Enter one scripture reference per line"></textarea>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Scripture Tabs - Scrollable -->
+            <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
+                <div id="scripture-tabs" class="flex-none border-b border-gray-200 w-full">
+                    <!-- Tabs will be inserted here -->
+                </div>
+                <div id="tab-content" class="flex-1 mt-4 overflow-y-auto">
+                    <!-- Tab content will be inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Debug Log Section - Fixed Height -->
+    <div class="flex-none bg-white rounded-lg shadow-sm p-4 mt-4">
+        <header class="text-lg font-semibold text-gray-800 mb-4">Debug Log</header>
+        <section id="message-log"
+                 class="h-[200px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto">
+        </section>
+    </div>
+</div>
+{% endblock %} 
