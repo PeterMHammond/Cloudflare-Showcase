@@ -2,6 +2,7 @@ use worker::*;
 use worker::console_log;
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
+use crate::utils::scripture::get_scripture;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
@@ -17,10 +18,16 @@ struct ControlMessage {
     control_type: String,
 }
 
+#[derive(Serialize, Deserialize, Debug)]
+struct TabBodyMessage {
+    id: String,
+    value: String,
+}
+
 #[wasm_bindgen]
 pub struct StudyDO {
     state: State,
-    _env: Env,
+    env: Env,
 }
 
 impl StudyDO {
@@ -40,6 +47,51 @@ impl StudyDO {
         }
         Ok(())
     }
+
+    async fn process_scripture_control(&self, control_name: &str, text: &str) -> Result<()> {
+        console_log!("Processing scripture control: {} with text: {}", control_name, text);
+        
+        // Check if this is the scriptures control
+        if control_name == "scriptures" {
+            console_log!("Found scriptures control, attempting to get scripture");
+            
+            let web_socket_conns = self.state.get_websockets();
+            if web_socket_conns.is_empty() {
+                return Ok(());
+            }
+
+            // Get all references, including empty lines
+            let references: Vec<&str> = text.lines().collect();
+            
+            // Process each reference and send individual updates
+            for (index, reference) in references.iter().enumerate() {
+                let reference = reference.trim();
+                
+                let content = if !reference.is_empty() {
+                    match get_scripture(reference, "LSB", &self.env).await {
+                        Ok(scripture_text) => scripture_text,
+                        Err(e) => {
+                            console_log!("Error getting scripture for {}: {:?}", reference, e);
+                            String::new()
+                        }
+                    }
+                } else {
+                    String::new()
+                };
+
+                let tab_body_msg = TabBodyMessage {
+                    id: format!("scripture-content-{}", index),
+                    value: content,
+                };
+
+                console_log!("Sending scripture result for tab {}: {:?}", index, tab_body_msg);
+                for conn in &web_socket_conns {
+                    let _ = conn.send(&tab_body_msg);
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
 #[durable_object]
@@ -47,12 +99,11 @@ impl DurableObject for StudyDO {
     fn new(state: State, env: Env) -> Self {
         Self { 
             state,
-            _env: env,
+            env,
         }        
     }
 
     async fn fetch(&mut self, req: Request) -> Result<Response> {
-
         if !req.headers().get("Upgrade")?.map_or(false, |v| v.eq_ignore_ascii_case("websocket")) {
             return Response::error("Expected Upgrade: websocket", 426);
         }
@@ -85,7 +136,10 @@ impl DurableObject for StudyDO {
                         let storage_key = format!("control:{}", control_message.control_name);
                         self.state.storage().put(&storage_key, &control_message).await?;
                         
-                        // Send to other clients
+                        if let ControlValue::Text(text) = &control_message.control_value {
+                            self.process_scripture_control(&control_message.control_name, text).await?;
+                        }
+                        
                         let web_socket_conns = self.state.get_websockets();
                         web_socket_conns.iter()
                             .filter(|&conn| conn != &ws)

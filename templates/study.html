@@ -121,12 +121,12 @@ htmx.defineExtension('form-handler', {
                 evt.detail.parameters['control_name'] = input.name;
                 evt.detail.parameters['control_value'] = value;
                 evt.detail.parameters['control_type'] = controlType;
-
-                // Immediately update tabs for local client if this is the scriptures field
-                if (input.name === 'scriptures') {
-                    updateScriptureTabs(value);
-                }
             });
+
+            // For local updates, update tabs immediately
+            if (evt.detail.parameters.control_name === 'scriptures') {
+                updateScriptureTabs(evt.detail.parameters.control_value);
+            }
 
             return {
                 value: JSON.stringify(evt.detail.parameters)
@@ -135,23 +135,112 @@ htmx.defineExtension('form-handler', {
     }
 });
 
+function updateScriptureTabs(scriptures) {
+    const tabsContainer = document.getElementById('scripture-tabs');
+    const contentContainer = document.getElementById('scripture-content');
+    
+    if (!tabsContainer || !contentContainer) return;
+
+    // Clear existing tabs and content
+    tabsContainer.innerHTML = '';
+    contentContainer.innerHTML = '';
+
+    // Split scriptures by newlines
+    const references = scriptures.split('\n').filter(ref => ref.trim());
+    
+    if (references.length > 0) {
+        tabsContainer.style.display = 'flex';
+        contentContainer.style.display = 'block';
+        
+        references.forEach((reference, index) => {
+            // Create tab button
+            const tab = document.createElement('button');
+            tab.className = `px-4 py-2 text-sm font-medium rounded-t-lg break-words ${
+                index === 0 
+                    ? 'bg-white text-blue-600 border-l border-r border-t border-gray-200' 
+                    : 'text-gray-500 hover:text-gray-700 bg-gray-50'
+            }`;
+            tab.textContent = reference.trim();
+            tab.onclick = () => switchTab(index);
+            tabsContainer.appendChild(tab);
+
+            // Create content div
+            const content = document.createElement('div');
+            content.id = `scripture-content-${index}`;
+            content.className = `bg-white rounded-lg shadow-sm p-4 break-words whitespace-pre-wrap ${index === 0 ? '' : 'hidden'}`;
+            contentContainer.appendChild(content);
+        });
+    } else {
+        tabsContainer.style.display = 'none';
+        contentContainer.style.display = 'none';
+    }
+}
+
+function switchTab(selectedIndex) {
+    const tabs = document.getElementById('scripture-tabs').children;
+    const contents = document.getElementById('scripture-content').children;
+
+    Array.from(tabs).forEach((tab, index) => {
+        if (index === selectedIndex) {
+            tab.className = 'px-4 py-2 text-sm font-medium rounded-t-lg break-words bg-white text-blue-600 border-l border-r border-t border-gray-200';
+        } else {
+            tab.className = 'px-4 py-2 text-sm font-medium rounded-t-lg break-words text-gray-500 hover:text-gray-700 bg-gray-50';
+        }
+    });
+
+    Array.from(contents).forEach((content, index) => {
+        content.className = `bg-white rounded-lg shadow-sm p-4 break-words whitespace-pre-wrap ${index === selectedIndex ? '' : 'hidden'}`;
+    });
+}
+
+// Update the form-update-handler to handle both local and remote scripture updates
 htmx.defineExtension('form-update-handler', {
     transformResponse: function (text, xhr, elt) {
         try {
             let data;
             if (xhr && xhr.responseText) {
-                // Local form submission - already handled by form-handler
                 const response = JSON.parse(xhr.responseText);
                 data = response.value ? JSON.parse(response.value) : response;
             } else {
-                // WebSocket message from remote client
                 data = JSON.parse(text);
-                if (data.control_name === 'scriptures') {
-                    updateScriptureTabs(data.control_value);
-                }
             }
 
-            if (data.id === 'client-count') {
+            // Store content updates until tabs are ready
+            if (data.id && data.id.startsWith('scripture-content-')) {
+                if (!window.pendingContentUpdates) {
+                    window.pendingContentUpdates = new Map();
+                }
+                window.pendingContentUpdates.set(data.id, data.value);
+            }
+
+            // Handle control messages first
+            if (data.control_type && data.control_name && data.control_value !== undefined) {
+                // Update the control value
+                const element = document.getElementById(data.control_name) || 
+                              document.querySelector(`[name="${data.control_name}"]`);
+                if (element) {
+                    element.value = data.control_value;
+                }
+                
+                // If it's a scriptures update, update the tabs and apply pending content
+                if (data.control_name === 'scriptures') {
+                    console.log('Updating tabs from remote change:', data.control_value);
+                    updateScriptureTabs(data.control_value);
+                    
+                    // Apply any pending content updates
+                    if (window.pendingContentUpdates) {
+                        window.pendingContentUpdates.forEach((value, id) => {
+                            const contentDiv = document.getElementById(id);
+                            if (contentDiv) {
+                                contentDiv.innerHTML = value;
+                            }
+                        });
+                        window.pendingContentUpdates.clear();
+                    }
+                }
+            }
+            // Handle other updates
+            else if (data.id === 'client-count') {
                 const clientCount = document.getElementById('client-count');
                 if (clientCount) {
                     clientCount.textContent = data.value;
@@ -160,11 +249,11 @@ htmx.defineExtension('form-update-handler', {
                 if (connectionStatus && connectionStatus.classList.contains('bg-green-100')) {
                     connectionStatus.textContent = `${data.value} Participants`;
                 }
-            } else if (data.control_type && data.control_name && data.control_value !== undefined) {
-                const element = document.getElementById(data.control_name) || 
-                              document.querySelector(`[name="${data.control_name}"]`);
-                if (element) {
-                    element.value = data.control_value;
+            } else if (data.id && data.id.startsWith('scripture-content-')) {
+                // Apply content update if tabs exist, otherwise it's already stored in pendingContentUpdates
+                const contentDiv = document.getElementById(data.id);
+                if (contentDiv) {
+                    contentDiv.innerHTML = data.value;
                 }
             }
             return text;
@@ -174,87 +263,6 @@ htmx.defineExtension('form-update-handler', {
         }
     }
 });
-
-// Function to update scripture tabs
-function updateScriptureTabs(content) {
-    const tabsContainer = document.getElementById('scripture-tabs');
-    const tabContentContainer = document.getElementById('tab-content');
-    if (!tabsContainer || !tabContentContainer) return;
-
-    // Clear existing tabs and content
-    tabsContainer.innerHTML = '';
-    tabContentContainer.innerHTML = '';
-
-    // Split content into lines and create tabs
-    const scriptures = content.split('\n').filter(line => line.trim());
-    
-    // Create tab container with width constraint
-    const tabList = document.createElement('div');
-    tabList.className = 'flex flex-wrap gap-2 w-full';
-    
-    scriptures.forEach((scripture, index) => {
-        // Create tab
-        const tab = document.createElement('button');
-        tab.className = `px-4 py-2 font-medium rounded-t-lg ${index === 0 ? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`;
-        tab.textContent = scripture;
-        tab.onclick = () => switchTab(index);
-        tabList.appendChild(tab);
-
-        // Create tab content
-        const tabContent = document.createElement('div');
-        tabContent.className = `bg-white p-4 rounded-lg ${index === 0 ? '' : 'hidden'}`;
-        tabContent.id = `tab-${index}`;
-        
-        // Add content for the scripture
-        const tabForm = document.createElement('form');
-        tabForm.innerHTML = `
-            <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700">Notes for ${scripture}</label>
-                <textarea name="control-${index}"
-                          rows="4"
-                          ws-send="keyup"
-                          hx-trigger="keyup delay:300ms"
-                          class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"></textarea>
-            </div>
-        `;
-        tabContent.appendChild(tabForm);
-        tabContentContainer.appendChild(tabContent);
-    });
-
-    // Add the tab list to the container
-    tabsContainer.appendChild(tabList);
-
-    // Make containers visible
-    tabsContainer.style.display = "block";
-    tabContentContainer.style.display = "block";
-
-    // Force reflow to fix layout
-    tabsContainer.offsetWidth;
-}
-
-// Add resize listener for dynamic handling
-window.addEventListener('resize', () => {
-    const tabsContainer = document.getElementById('scripture-tabs');
-    const tabContentContainer = document.getElementById('tab-content');
-    if (tabsContainer && tabContentContainer) {
-        tabsContainer.style.width = "100%";
-        tabContentContainer.style.width = "100%";
-    }
-});
-
-function switchTab(index) {
-    // Update tab styles
-    const tabs = document.getElementById('scripture-tabs').children;
-    Array.from(tabs).forEach((tab, i) => {
-        tab.className = `px-4 py-2 font-medium rounded-t-lg ${i === index ? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`;
-    });
-
-    // Show selected tab content
-    const contents = document.getElementById('tab-content').children;
-    Array.from(contents).forEach((content, i) => {
-        content.className = `bg-white p-4 rounded-lg ${i === index ? '' : 'hidden'}`;
-    });
-}
 </script>
 
 <div class="h-screen flex flex-col p-4 overflow-hidden" 
@@ -294,18 +302,18 @@ function switchTab(index) {
                         <textarea name="scriptures"
                                   rows="4"
                                   class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                  placeholder="Enter one scripture reference per line"></textarea>
+                                  placeholder="Enter scripture references"></textarea>
                     </form>
                 </div>
-            </div>
 
-            <!-- Scripture Tabs - Scrollable -->
-            <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
-                <div id="scripture-tabs" class="flex-none border-b border-gray-200 w-full">
-                    <!-- Tabs will be inserted here -->
-                </div>
-                <div id="tab-content" class="flex-1 mt-4 overflow-y-auto">
-                    <!-- Tab content will be inserted here -->
+                <!-- Scripture Result -->
+                <div class="scripture-container">
+                    <!-- Tab Headers -->
+                    <div id="scripture-tabs" class="flex flex-wrap gap-2 border-b border-gray-200" style="display: none;">
+                    </div>
+                    <!-- Tab Content -->
+                    <div id="scripture-content" class="mt-4 break-words whitespace-pre-wrap" style="display: none;">
+                    </div>
                 </div>
             </div>
         </div>

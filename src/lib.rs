@@ -10,6 +10,9 @@ use routes::{
 };
 
 mod template;
+pub mod utils {
+    pub mod scripture;
+}
 mod routes {
     pub mod about;
     pub mod index;
