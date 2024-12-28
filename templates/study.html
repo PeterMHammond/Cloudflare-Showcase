@@ -87,7 +87,7 @@ htmx.defineExtension('ws-debug', {
             msgType = '&lt;html&gt; ';
         }
 
-        logEntry.className = `whitespace-pre ${
+        logEntry.className = `whitespace-pre-wrap break-words ${
             direction === 'ERROR' ? 'text-red-400' :
             direction === 'CONNECT' ? 'text-yellow-400' :
             direction === 'DISCONNECT' ? 'text-yellow-400' :
@@ -218,7 +218,7 @@ function updateScriptureContent(content) {
                 <div class="animate-pulse text-gray-500">Loading scripture...</div>
             </div>`;
     } else {
-        contentContainer.innerHTML = `<div class="prose max-w-none">${content}</div>`;
+        contentContainer.innerHTML = `<div class="prose max-w-full">${content}</div>`;
     }
 }
 
@@ -228,6 +228,14 @@ htmx.defineExtension('form-update-handler', {
         try {
             const data = typeof text === 'string' ? JSON.parse(text) : text;
             console.log('Parsed data:', data);
+
+            // Add participant count handling
+            if (data.id === 'client-count') {
+                const connectionStatus = document.getElementById("connection-status");
+                if (connectionStatus && connectionStatus.classList.contains('bg-green-100')) {
+                    connectionStatus.textContent = `${data.value} Participants`;
+                }
+            }
 
             // Handle scripture content updates
             if (data.id && data.id.startsWith('scripture-content-')) {
@@ -334,37 +342,43 @@ document.addEventListener('htmx:wsOpen', function(evt) {
                            class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                 </form>
 
-                <label class="block text-sm font-medium text-gray-700">Scriptures</label>
-                <form ws-send="keyup" hx-trigger="keyup delay:300ms">
-                    <textarea name="scriptures"
-                              rows="4"
-                              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                              placeholder="Enter scripture references"></textarea>
-                </form>
+                <div class="flex gap-4">
+                    <div class="w-1/2">
+                        <label class="block text-sm font-medium text-gray-700">Scriptures</label>
+                        <form ws-send="keyup" hx-trigger="keyup delay:300ms">
+                            <textarea name="scriptures"
+                                    rows="4"
+                                    class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                    placeholder="Enter scripture references"></textarea>
+                        </form>
+                    </div>
+                    
+                    <div class="w-1/2">
+                        <label class="block text-sm font-medium text-gray-700">Scripture List</label>
+                        <form ws-send class="mt-1" hx-trigger="change from:select">
+                            <select name="selected-scripture" 
+                                    data-control-type="radio" 
+                                    size="4" 
+                                    class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            </select>
+                        </form>
+                    </div>
+                </div>
             </div>
 
-            <!-- Scripture List and Content -->
-            <div class="flex-1 flex gap-4 min-h-0">
-                <!-- Scripture List -->
-                <form ws-send class="w-64 bg-white rounded-lg shadow-sm p-4 overflow-y-auto" hx-trigger="change from:select">
-                    <select name="selected-scripture" 
-                            data-control-type="radio" 
-                            size="10" 
-                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                    </select>
-                </form>
-                <!-- Scripture Content -->
-                <div id="scripture-content" class="flex-1 bg-white rounded-lg shadow-sm p-4 overflow-y-auto">
-                </div>
+            <!-- Scripture Content -->
+            <div id="scripture-content" class="flex-1 bg-white rounded-lg shadow-sm p-4 overflow-y-auto">
             </div>
         </div>
     </div>
 
     <!-- Debug Log -->
-    <div class="flex-none bg-white rounded-lg shadow-sm p-4 mt-4">
-        <header class="text-lg font-semibold text-gray-800 mb-4">Debug Log</header>
+    <div class="flex-none bg-white rounded-lg shadow-sm p-4 mt-4 hidden" style="width: 800px; max-width: 800px;">
+        <header class="text-lg font-semibold text-gray-800 mb-4 w-full max-w-[768px] overflow-hidden">Debug Log</header>
         <section id="message-log"
-                 class="h-[200px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto">
+                 class="h-[200px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto w-full max-w-[768px]">
+            <div class="whitespace-pre-wrap break-words w-full max-w-[736px] overflow-hidden">
+            </div>
         </section>
     </div>
 </div>
