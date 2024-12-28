@@ -109,23 +109,34 @@ htmx.defineExtension('ws-debug', {
     }
 });
 
+// Update the form-handler extension to handle select changes
 htmx.defineExtension('form-handler', {
     onEvent: function (name, evt) {
         if (name === 'htmx:wsConfigSend') {
-            evt.detail.parameters = {};
             const form = evt.detail.triggeringEvent.target.closest('form');
-            const inputs = form.querySelectorAll('input, select, textarea');
-            inputs.forEach((input) => {
-                const controlType = input.type || input.tagName.toLowerCase();
-                let value = controlType === 'checkbox' ? input.checked : input.value;
-                evt.detail.parameters['control_name'] = input.name;
-                evt.detail.parameters['control_value'] = value;
-                evt.detail.parameters['control_type'] = controlType;
-            });
+            if (!form) return;
 
-            // For local updates, update tabs immediately
+            const inputs = form.querySelectorAll('input, select, textarea');
+            if (inputs.length === 0) return;
+
+            const input = inputs[0];
+            const controlType = input.dataset.controlType || input.type || input.tagName.toLowerCase();
+            const value = input.value;
+
+            // Create the message to send
+            evt.detail.parameters = {
+                control_name: input.name,
+                control_value: value,
+                control_type: controlType,
+                // Add request for scripture content
+                request_content: input.name === 'selected-scripture' ? true : undefined
+            };
+
+            console.log('Sending control update:', evt.detail.parameters);
+
+            // For local updates
             if (evt.detail.parameters.control_name === 'scriptures') {
-                updateScriptureTabs(evt.detail.parameters.control_value);
+                updateScriptureList(evt.detail.parameters.control_value);
             }
 
             return {
@@ -135,133 +146,165 @@ htmx.defineExtension('form-handler', {
     }
 });
 
-function updateScriptureTabs(scriptures) {
-    const tabsContainer = document.getElementById('scripture-tabs');
+// Add a cache to store scripture content
+const scriptureCache = new Map();
+
+function updateScriptureList(scriptures) {
+    const select = document.querySelector('select[name="selected-scripture"]');
     const contentContainer = document.getElementById('scripture-content');
     
-    if (!tabsContainer || !contentContainer) return;
-
-    // Clear existing tabs and content
-    tabsContainer.innerHTML = '';
-    contentContainer.innerHTML = '';
-
-    // Split scriptures by newlines
-    const references = scriptures.split('\n').filter(ref => ref.trim());
-    
-    if (references.length > 0) {
-        tabsContainer.style.display = 'flex';
-        contentContainer.style.display = 'block';
-        
-        references.forEach((reference, index) => {
-            // Create tab button
-            const tab = document.createElement('button');
-            tab.className = `px-4 py-2 text-sm font-medium rounded-t-lg break-words ${
-                index === 0 
-                    ? 'bg-white text-blue-600 border-l border-r border-t border-gray-200' 
-                    : 'text-gray-500 hover:text-gray-700 bg-gray-50'
-            }`;
-            tab.textContent = reference.trim();
-            tab.onclick = () => switchTab(index);
-            tabsContainer.appendChild(tab);
-
-            // Create content div
-            const content = document.createElement('div');
-            content.id = `scripture-content-${index}`;
-            content.className = `bg-white rounded-lg shadow-sm p-4 break-words whitespace-pre-wrap ${index === 0 ? '' : 'hidden'}`;
-            contentContainer.appendChild(content);
-        });
-    } else {
-        tabsContainer.style.display = 'none';
-        contentContainer.style.display = 'none';
+    if (!select || !contentContainer) {
+        console.error('Required elements not found');
+        return;
     }
-}
 
-function switchTab(selectedIndex) {
-    const tabs = document.getElementById('scripture-tabs').children;
-    const contents = document.getElementById('scripture-content').children;
+    // Clear existing content
+    select.innerHTML = '';
+    contentContainer.innerHTML = '';
+    
+    // Create options for scripture selection
+    const references = scriptures.split('\n').filter(ref => ref.trim());
+    references.forEach((reference, index) => {
+        const option = document.createElement('option');
+        option.value = index.toString();
+        option.textContent = reference.trim();
+        option.dataset.contentId = `scripture-content-${index}`;
+        
+        // Add cached content if available
+        if (scriptureCache.has(option.dataset.contentId)) {
+            option.dataset.content = scriptureCache.get(option.dataset.contentId);
+        }
+        
+        select.appendChild(option);
+    });
 
-    Array.from(tabs).forEach((tab, index) => {
-        if (index === selectedIndex) {
-            tab.className = 'px-4 py-2 text-sm font-medium rounded-t-lg break-words bg-white text-blue-600 border-l border-r border-t border-gray-200';
-        } else {
-            tab.className = 'px-4 py-2 text-sm font-medium rounded-t-lg break-words text-gray-500 hover:text-gray-700 bg-gray-50';
+    // Add change handler
+    select.addEventListener('change', (event) => {
+        const selectedIndex = parseInt(select.value);
+        const selectedOption = select.options[selectedIndex];
+
+        if (selectedOption) {
+            const contentId = selectedOption.dataset.contentId;
+            console.log(`Selection changed to: ${contentId}`);
+            
+            // Use cached content if available
+            if (scriptureCache.has(contentId)) {
+                updateScriptureContent(scriptureCache.get(contentId));
+            } else {
+                updateScriptureContent('Loading...');
+            }
         }
     });
 
-    Array.from(contents).forEach((content, index) => {
-        content.className = `bg-white rounded-lg shadow-sm p-4 break-words whitespace-pre-wrap ${index === selectedIndex ? '' : 'hidden'}`;
-    });
+    // Show initial content
+    if (references.length > 0) {
+        select.selectedIndex = 0;
+        const firstOption = select.options[0];
+        if (firstOption && scriptureCache.has(firstOption.dataset.contentId)) {
+            updateScriptureContent(scriptureCache.get(firstOption.dataset.contentId));
+        } else {
+            updateScriptureContent('Loading...');
+        }
+    }
 }
 
-// Update the form-update-handler to handle both local and remote scripture updates
+function updateScriptureContent(content) {
+    const contentContainer = document.getElementById('scripture-content');
+    if (!contentContainer) return;
+    
+    if (content === 'Loading...') {
+        contentContainer.innerHTML = `
+            <div class="flex items-center justify-center h-full">
+                <div class="animate-pulse text-gray-500">Loading scripture...</div>
+            </div>`;
+    } else {
+        contentContainer.innerHTML = `<div class="prose max-w-none">${content}</div>`;
+    }
+}
+
+// Update the form-update-handler extension
 htmx.defineExtension('form-update-handler', {
     transformResponse: function (text, xhr, elt) {
         try {
-            let data;
-            if (xhr && xhr.responseText) {
-                const response = JSON.parse(xhr.responseText);
-                data = response.value ? JSON.parse(response.value) : response;
-            } else {
-                data = JSON.parse(text);
-            }
+            const data = typeof text === 'string' ? JSON.parse(text) : text;
+            console.log('Parsed data:', data);
 
-            // Store content updates until tabs are ready
+            // Handle scripture content updates
             if (data.id && data.id.startsWith('scripture-content-')) {
-                if (!window.pendingContentUpdates) {
-                    window.pendingContentUpdates = new Map();
-                }
-                window.pendingContentUpdates.set(data.id, data.value);
-            }
-
-            // Handle control messages first
-            if (data.control_type && data.control_name && data.control_value !== undefined) {
-                // Update the control value
-                const element = document.getElementById(data.control_name) || 
-                              document.querySelector(`[name="${data.control_name}"]`);
-                if (element) {
-                    element.value = data.control_value;
-                }
+                const contentId = data.id;
+                console.log('Received content for:', contentId);
                 
-                // If it's a scriptures update, update the tabs and apply pending content
-                if (data.control_name === 'scriptures') {
-                    console.log('Updating tabs from remote change:', data.control_value);
-                    updateScriptureTabs(data.control_value);
-                    
-                    // Apply any pending content updates
-                    if (window.pendingContentUpdates) {
-                        window.pendingContentUpdates.forEach((value, id) => {
-                            const contentDiv = document.getElementById(id);
-                            if (contentDiv) {
-                                contentDiv.innerHTML = value;
+                // Cache the content
+                scriptureCache.set(contentId, data.value);
+                
+                // Update content if this is the currently selected scripture
+                const select = document.querySelector('select[name="selected-scripture"]');
+                const selectedOption = select.options[select.selectedIndex];
+                
+                if (selectedOption && selectedOption.dataset.contentId === contentId) {
+                    console.log('Updating display - matches current selection');
+                    updateScriptureContent(data.value);
+                } else {
+                    console.log('Skipping update - different selection');
+                }
+            }
+            // Handle control messages
+            else if (data.control_type && data.control_name && data.control_value !== undefined) {
+                const element = document.querySelector(`[name="${data.control_name}"]`);
+                if (element) {
+                    if (data.control_type === 'radio' && data.control_name === 'selected-scripture') {
+                        const selectedIndex = parseInt(data.control_value);
+                        console.log('Updating selection to:', selectedIndex);
+                        
+                        element.value = data.control_value;
+                        element.selectedIndex = selectedIndex;
+                        
+                        // Check cache for content when selection changes
+                        const selectedOption = element.options[selectedIndex];
+                        if (selectedOption) {
+                            const contentId = selectedOption.dataset.contentId;
+                            console.log('Selected content ID:', contentId);
+                            
+                            if (scriptureCache.has(contentId)) {
+                                // Use cached content if available
+                                updateScriptureContent(scriptureCache.get(contentId));
+                            } else {
+                                // Request content if not cached
+                                updateScriptureContent('Loading...');
+                                htmx.trigger(element.closest('form'), 'ws-send', {
+                                    detail: {
+                                        parameters: {
+                                            control_name: 'selected-scripture',
+                                            control_value: selectedIndex.toString(),
+                                            control_type: 'radio',
+                                            request_content: true
+                                        }
+                                    }
+                                });
                             }
-                        });
-                        window.pendingContentUpdates.clear();
+                        }
+                    } else {
+                        element.value = data.control_value;
+                    }
+
+                    if (data.control_name === 'scriptures') {
+                        console.log('Rebuilding scripture list');
+                        updateScriptureList(data.control_value);
                     }
                 }
             }
-            // Handle other updates
-            else if (data.id === 'client-count') {
-                const clientCount = document.getElementById('client-count');
-                if (clientCount) {
-                    clientCount.textContent = data.value;
-                }
-                const connectionStatus = document.getElementById("connection-status");
-                if (connectionStatus && connectionStatus.classList.contains('bg-green-100')) {
-                    connectionStatus.textContent = `${data.value} Participants`;
-                }
-            } else if (data.id && data.id.startsWith('scripture-content-')) {
-                // Apply content update if tabs exist, otherwise it's already stored in pendingContentUpdates
-                const contentDiv = document.getElementById(data.id);
-                if (contentDiv) {
-                    contentDiv.innerHTML = data.value;
-                }
-            }
+
             return text;
         } catch (e) {
             console.error('Error processing message:', e);
             return text;
         }
     }
+});
+
+// Remove the initializeFromCache call since we're not caching anymore
+document.addEventListener('htmx:wsOpen', function(evt) {
+    console.log('WebSocket connected');
 });
 </script>
 
@@ -276,50 +319,48 @@ htmx.defineExtension('form-update-handler', {
                    class="inline-block text-sm font-medium rounded-full px-4 py-1 w-fit bg-red-100 text-red-600">
                 Disconnected
             </aside>
-            <span id="client-count" class="hidden">0</span>
         </div>
     </div>
 
-    <!-- Main Content Area - Scrollable -->
+    <!-- Main Content Area -->
     <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
         <div class="bg-gray-50 p-6 rounded-lg flex-1 flex flex-col overflow-hidden">
-            <!-- Fixed Height Input Section -->
-            <div class="flex-none">
-                <!-- Topic Input -->
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700">Topic</label>
-                    <form ws-send="keyup" hx-trigger="keyup delay:300ms" hx-target="this" onsubmit="return false;">
-                        <input type="text" 
-                               name="study-topic" 
-                               class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                    </form>
-                </div>
+            <!-- Input Section -->
+            <div class="flex-none mb-4">
+                <label class="block text-sm font-medium text-gray-700">Topic</label>
+                <form ws-send="keyup" hx-trigger="keyup delay:300ms" class="mb-4">
+                    <input type="text" 
+                           name="study-topic" 
+                           class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                </form>
 
-                <!-- Scriptures Input -->
-                <div class="mb-4">
-                    <label class="block text-sm font-medium text-gray-700">Scriptures</label>
-                    <form ws-send="keyup" hx-trigger="keyup delay:300ms" hx-target="this" onsubmit="return false;">
-                        <textarea name="scriptures"
-                                  rows="4"
-                                  class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
-                                  placeholder="Enter scripture references"></textarea>
-                    </form>
-                </div>
+                <label class="block text-sm font-medium text-gray-700">Scriptures</label>
+                <form ws-send="keyup" hx-trigger="keyup delay:300ms">
+                    <textarea name="scriptures"
+                              rows="4"
+                              class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                              placeholder="Enter scripture references"></textarea>
+                </form>
+            </div>
 
-                <!-- Scripture Result -->
-                <div class="scripture-container">
-                    <!-- Tab Headers -->
-                    <div id="scripture-tabs" class="flex flex-wrap gap-2 border-b border-gray-200" style="display: none;">
-                    </div>
-                    <!-- Tab Content -->
-                    <div id="scripture-content" class="mt-4 break-words whitespace-pre-wrap" style="display: none;">
-                    </div>
+            <!-- Scripture List and Content -->
+            <div class="flex-1 flex gap-4 min-h-0">
+                <!-- Scripture List -->
+                <form ws-send class="w-64 bg-white rounded-lg shadow-sm p-4 overflow-y-auto" hx-trigger="change from:select">
+                    <select name="selected-scripture" 
+                            data-control-type="radio" 
+                            size="10" 
+                            class="w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </select>
+                </form>
+                <!-- Scripture Content -->
+                <div id="scripture-content" class="flex-1 bg-white rounded-lg shadow-sm p-4 overflow-y-auto">
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Debug Log Section - Fixed Height -->
+    <!-- Debug Log -->
     <div class="flex-none bg-white rounded-lg shadow-sm p-4 mt-4">
         <header class="text-lg font-semibold text-gray-800 mb-4">Debug Log</header>
         <section id="message-log"

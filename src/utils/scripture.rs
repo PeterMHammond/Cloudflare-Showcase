@@ -50,9 +50,7 @@ pub async fn get_scripture(reference: &str, translation: &str, env: &Env) -> wor
             format!("{} {}:{}", book, chapter, verse_start)
         } else {
             format!("{} {}:{}-{}", book, chapter, verse_start, verse_end)
-        };
-
-        console_log!("Formatted scripture reference: {}", scripture_ref);
+        };        
 
         match fetch_scripture_from_api(
             env,
@@ -63,7 +61,7 @@ pub async fn get_scripture(reference: &str, translation: &str, env: &Env) -> wor
         )
         .await {
             Ok(scripture_response) => {
-                console_log!("Received scripture response: {:?}", scripture_response);
+                console_log!("Received scripture response: {:?}", scripture_response.resolved_reference);
                 Ok(scripture_response.formatted())
             }
             Err(e) => {
@@ -114,7 +112,7 @@ pub async fn fetch_scripture_from_api(
 
     let mut response = Fetch::Request(Request::new_with_init(&url, &init)?).send().await?;
     let text = response.text().await?;
-    console_log!("Raw API response: {}", text);
+    // console_log!("Raw API response: {}", text);
     
     if text.is_empty() {
         return Err(Error::RustError("Empty response from scripture service".to_string()));

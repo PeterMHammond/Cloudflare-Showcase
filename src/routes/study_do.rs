@@ -84,7 +84,7 @@ impl StudyDO {
                     value: content,
                 };
 
-                console_log!("Sending scripture result for tab {}: {:?}", index, tab_body_msg);
+                // console_log!("Sending scripture result for tab {}: {:?}", index, tab_body_msg);
                 for conn in &web_socket_conns {
                     let _ = conn.send(&tab_body_msg);
                 }
