@@ -75,7 +75,6 @@ htmx.defineExtension('ws-debug', {
     }
 });
 
-// Handle connection status
 htmx.defineExtension("ws-connection-status", {
     onEvent: function (name, evt) {
         const connectionStatus = document.getElementById("connection-status");
@@ -117,7 +116,6 @@ htmx.defineExtension('form-handler', {
     }
 });
 
-// Define a WebSocket form update handler extension
 htmx.defineExtension('form-update-handler', {
     transformResponse: function (text, xhr, elt) {
         try {
@@ -168,60 +166,72 @@ htmx.defineExtension('form-update-handler', {
     }
 });
 
-
-
 </script>
 
 <section class="h-full p-8 flex flex-col overflow-hidden"
          hx-ext="ws,ws-debug,ws-connection-status,form-handler,form-update-handler"
          ws-connect="/websocket_do">
+         
     <!-- Header Section -->
-    <article class="bg-white rounded-lg shadow-sm p-8 space-y-4">
-        <header class="text-2xl font-bold text-gray-800">Durable Object WebSocket Events Demo</header>
-        <!-- Connection Status -->
-        <aside id="connection-status" 
-               class="inline-block text-sm font-medium rounded-full px-4 py-1 w-fit bg-red-100 text-red-600">
-            Disconnected
-        </aside>
+    <article class="bg-white rounded-lg shadow-sm mb-4">
+                <h1 class="text-2xl font-bold text-gray-800">Experience real-time synchronization powered by <br>Cloudflare Durable Objects and WebSockets</h1>
+                <!-- Connection Status Badge -->
+                <aside id="connection-status" 
+                       class="absolute left-1/2 -translate-x-1/2 -top-3 z-10 inline-block text-sm font-medium rounded-full px-4 py-1 w-fit bg-red-100 text-red-600 shadow-sm">
+                    Disconnected
+                </aside>
+                <p class="text-gray-600 max-w-2xl">
+                    This demo showcases a serverless alarm event triggering updates that synchronize shared objects across all connected clients instantly via WebSockets. What makes this so amazing is the seamless and scalable architecture: no dedicated servers, no polling—just lightning-fast, real-time communication. Whether you’re syncing data in a collaborative application or building real-time dashboards, this technology ensures consistency and responsiveness like never before.</p>
+                <p class="text-sm text-blue-600">
+                    <a href="/websocket" target="_blank" class="inline-flex items-center hover:underline">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                        Open another client
+                    </a>
+                </p>
     </article>
 
-    <!-- Real-Time Data Section -->
-    <section class="flex items-start space-x-4">
-        <!-- Real-Time Clock -->
-        <time class="inline-block text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner h-32 flex flex-col">
-            <header class="font-semibold text-sm mb-2">Clock Event</header>
-            <p id="clock-display" class="text-4xl font-bold">--:--:-- --</p>
-        </time>
+    <!-- Container for status and data section -->
+    <div class="relative">
+        <!-- Real-Time Data Section -->
+        <section class="flex items-start space-x-4">
+            <!-- Real-Time Clock -->
+            <time class="inline-block text-gray-800 bg-gray-50 px-4 py-4 rounded-lg shadow-inner h-24 flex flex-col">
+                <header class="font-semibold text-sm">Clock Event</header>
+                <p id="clock-display" class="text-4xl font-bold">--:--:-- --</p>
+            </time>
 
-        <!-- Shared Checkbox -->
-        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-32 flex flex-col">
-            <header class="font-semibold text-sm mb-2">Shared Checkbox</header>
-            <div id="shared-checkbox-container" class="flex h-full justify-center pt-2">
-                <form ws-send="changed" hx-trigger="change from:input" hx-target="#shared-checkbox-container">
-                    <input type="checkbox" 
-                           name="example-12345" 
-                           id="example-12345" 
-                           class="w-6 h-6 rounded">
+            <!-- Shared Checkbox -->
+            <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-24 flex flex-col">
+                <header class="font-semibold text-sm">Shared Checkbox</header>
+                <div id="shared-checkbox-container" class="flex h-full justify-center pt-2">
+                    <form ws-send="changed" hx-trigger="change from:input" hx-target="#shared-checkbox-container">
+                        <input type="checkbox" 
+                               name="example-12345" 
+                               id="example-12345" 
+                               class="w-6 h-6 rounded">
+                    </form>
+                </div>
+            </section>   
+
+            <!-- Shared Input -->
+            <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-24 flex flex-col">
+                <header class="font-semibold text-sm">Shared Input</header>
+                <form onsubmit="return false;" class="flex h-full">
+                    <textarea name="input-text-1" 
+                            ws-send="keyup" 
+                            hx-trigger="keyup delay:300ms" 
+                            hx-target="this"
+                            class="px-4 py-2 border rounded-lg text-lg min-h-12 max-h-12 resize-y w-full"
+                            placeholder="Type here..."></textarea>
                 </form>
-            </div>
-        </section>   
-
-        <!-- Shared Input -->
-        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-32 flex flex-col">
-            <header class="font-semibold text-sm mb-2">Shared Input</header>
-            <form onsubmit="return false;" class="flex h-full">
-                <textarea name="input-text-1" 
-                        ws-send="keyup" 
-                        hx-trigger="keyup delay:300ms" 
-                        hx-target="this"
-                        class="px-4 py-2 border rounded-lg text-lg min-h-12 max-h-12 resize-y w-full"
-                        placeholder="Type here..."></textarea>
-            </form>
+            </section>
         </section>
-    </section>
+    </div>
 
     <!-- Debug Log Section -->
-    <article class="flex-1 bg-white rounded-lg shadow-sm p-8 mt-4">
+    <article class="flex-1 bg-white rounded-lg shadow-sm mt-4">
         <header class="text-lg font-semibold text-gray-800 mb-4">Debug Log</header>
         <section id="message-log"
                  class="flex-1 min-h-0 max-h-[300px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto">
