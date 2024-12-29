@@ -61,6 +61,12 @@ impl WebsocketDO {
     }
 
     async fn schedule_next_alarm(&self) -> Result<()> {
+        if let Ok(control) = self.state.storage().get::<ControlMessage>("control:clock-enabled").await {
+            if let ControlValue::Bool(false) = control.control_value {
+                return Ok(());
+            }
+        }
+        
         self.state.storage().set_alarm(Duration::from_secs(1)).await
     }
 }
@@ -114,7 +120,13 @@ impl DurableObject for WebsocketDO {
                     Ok(control_message) => {
                         console_log!("Received message: {:?}", control_message);
                         let storage_key = format!("control:{}", control_message.control_name);
+                        
                         self.state.storage().put(&storage_key, &control_message).await?;
+                        
+                        if control_message.control_name == "clock-enabled" {
+                            self.schedule_next_alarm().await?;
+                        }
+
                         let web_socket_conns = self.state.get_websockets();
                         web_socket_conns.iter()
                             .filter(|&conn| conn != &ws)

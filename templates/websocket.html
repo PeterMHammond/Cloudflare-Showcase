@@ -204,20 +204,21 @@ htmx.defineExtension('form-update-handler', {
 
             <!-- Shared Checkbox -->
             <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-24 flex flex-col">
-                <header class="font-semibold text-sm">Shared Checkbox</header>
+                <header class="font-semibold text-sm">Enable Clock</header>
                 <div id="shared-checkbox-container" class="flex h-full justify-center pt-2">
                     <form ws-send="changed" hx-trigger="change from:input" hx-target="#shared-checkbox-container">
                         <input type="checkbox" 
-                               name="example-12345" 
-                               id="example-12345" 
-                               class="w-6 h-6 rounded">
+                               name="clock-enabled" 
+                               id="clock-enabled" 
+                               class="w-6 h-6 rounded"
+                               checked>
                     </form>
                 </div>
             </section>   
 
             <!-- Shared Input -->
             <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-24 flex flex-col">
-                <header class="font-semibold text-sm">Shared Input</header>
+                <header class="font-semibold text-sm">Share Message</header>
                 <form onsubmit="return false;" class="flex h-full">
                     <textarea name="input-text-1" 
                             ws-send="keyup" 
