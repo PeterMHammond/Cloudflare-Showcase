@@ -2,6 +2,7 @@ use worker::*;
 use askama::Template;
 use crate::template::{BaseTemplate, DefaultBaseTemplate};
 
+
 #[derive(Template)]
 #[template(path = "websocket.html")]
 struct WebsocketTemplate {

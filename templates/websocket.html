@@ -53,7 +53,7 @@ htmx.defineExtension('ws-debug', {
             msgType = '&lt;html&gt; ';
         }
 
-        logEntry.className = `whitespace-pre ${
+        logEntry.className = `whitespace-pre-wrap break-words ${
             direction === 'ERROR' ? 'text-red-400' :
             direction === 'CONNECT' ? 'text-yellow-400' :
             direction === 'DISCONNECT' ? 'text-yellow-400' :
@@ -81,7 +81,6 @@ htmx.defineExtension("ws-connection-status", {
         const connectionStatus = document.getElementById("connection-status");
         if (!connectionStatus) return;
 
-        // Base classes that should always be present for positioning and shape
         const baseClasses = "inline-block text-sm font-medium rounded-full px-4 py-1 w-fit";
 
         switch (name) {
@@ -126,11 +125,11 @@ htmx.defineExtension('form-update-handler', {
 
             // Handle client count updates
             if (data.id === 'client-count' && data.value !== undefined) {
-                const clientCountElement = document.getElementById('client-count');
-                if (clientCountElement) {
-                    clientCountElement.textContent = data.value;
-                    return text;
+                const connectionStatus = document.getElementById("connection-status");
+                if (connectionStatus && connectionStatus.classList.contains('bg-green-100')) {
+                    connectionStatus.textContent = `${data.value} Clients`;
                 }
+                return text;
             }
 
             // Handle UTC updates
@@ -189,55 +188,35 @@ htmx.defineExtension('form-update-handler', {
     <!-- Real-Time Data Section -->
     <section class="flex items-start space-x-4">
         <!-- Real-Time Clock -->
-        <time class="inline-block text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner h-[100px] flex flex-col items-center justify-center">
-            <header class="font-semibold text-sm">Clock Event</header>
+        <time class="inline-block text-gray-800 bg-gray-50 px-8 py-4 rounded-lg shadow-inner h-32 flex flex-col">
+            <header class="font-semibold text-sm mb-2">Clock Event</header>
             <p id="clock-display" class="text-4xl font-bold">--:--:-- --</p>
         </time>
 
-        <!-- Connected Clients -->
-        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
-            <header class="font-semibold text-sm">Connected Clients</header>
-            <p id="client-count" class="text-4xl font-bold">0</p>
-        </section>
-
         <!-- Shared Checkbox -->
-        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
-            <header class="font-semibold text-sm">Shared Checkbox</header>
-            <div id="shared-checkbox-container">
+        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-32 flex flex-col">
+            <header class="font-semibold text-sm mb-2">Shared Checkbox</header>
+            <div id="shared-checkbox-container" class="flex h-full justify-center pt-2">
                 <form ws-send="changed" hx-trigger="change from:input" hx-target="#shared-checkbox-container">
                     <input type="checkbox" 
                            name="example-12345" 
                            id="example-12345" 
                            class="w-6 h-6 rounded">
                 </form>
-                
-            
-                
             </div>
         </section>   
 
         <!-- Shared Input -->
-        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-[100px] flex flex-col items-center justify-center">
-            <header class="font-semibold text-sm">Shared Input</header>
-            
-            <form onsubmit="return false;">
-                <!-- <input type="text" 
-                       name="input-text-1" 
-                       ws-send="keyup" 
-                       hx-trigger="keyup delay:300ms" 
-                       hx-target="this"
-                       class="mt-2 px-4 py-2 border rounded-lg text-lg text-left"
-                       placeholder="Type here..."> -->
-                <textarea 
-                       name="multi-row-text-1" 
-                       ws-send="keyup" 
-                       hx-trigger="keyup delay:300ms" 
-                       hx-target="this"
-                       class="mt-2 px-4 py-2 border rounded-lg text-lg text-left textarea-auto-resize"
-                       rows="1" 
-                       placeholder="Type here..."></textarea>
-                       
-            </form>                                
+        <section class="inline-block bg-gray-50 px-8 py-4 rounded-lg shadow-inner text-gray-800 h-32 flex flex-col">
+            <header class="font-semibold text-sm mb-2">Shared Input</header>
+            <form onsubmit="return false;" class="flex h-full">
+                <textarea name="input-text-1" 
+                        ws-send="keyup" 
+                        hx-trigger="keyup delay:300ms" 
+                        hx-target="this"
+                        class="px-4 py-2 border rounded-lg text-lg min-h-12 max-h-12 resize-y w-full"
+                        placeholder="Type here..."></textarea>
+            </form>
         </section>
     </section>
 

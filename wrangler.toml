@@ -6,6 +6,7 @@ compatibility_flags = ["durable_object_alarms"]
 
 [build]
 command = "cargo install -q worker-build && worker-build --release"
+watch_dir = ["templates"]
 
 [observability]
 enabled = true
