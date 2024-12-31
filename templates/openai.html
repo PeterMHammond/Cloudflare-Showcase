@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="h-full p-8" data-token="{{ token }}">
+    <h2 class="text-xl font-semibold mb-4">OpenAI Voice Chat Demo</h2>
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="mb-4 p-4 bg-gray-100 rounded">
+                <p class="text-sm font-mono break-all">Token: {{ token }}</p>
+            </div>
+            <div id="chat-container" class="mb-4 h-64 overflow-y-auto border rounded p-4">
+                <!-- Chat messages will appear here -->
+            </div>
+            <div class="flex items-center gap-4">
+                <button id="startButton" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                    Start Recording
+                </button>
+                <button id="stopButton" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 hidden">
+                    Stop Recording
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let peerConnection = null;
+let dataChannel = null;
+
+async function initWebRTC() {
+    console.log('Initializing WebRTC...');
+    const token = document.querySelector('[data-token]').dataset.token;
+    console.log('Got token:', token.substring(0, 10) + '...');
+    
+    // Create a peer connection
+    peerConnection = new RTCPeerConnection();
+    console.log('Created peer connection');
+
+    // Set up audio element for model's audio output
+    const audioEl = document.createElement("audio");
+    audioEl.autoplay = true;
+    peerConnection.ontrack = e => {
+        console.log('Received remote track:', e.track.kind);
+        audioEl.srcObject = e.streams[0];
+    };
+
+    // Add local audio track for microphone input
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        }
+    });
+    stream.getTracks().forEach(track => {
+        console.log('Adding track:', track.kind, track.label);
+        peerConnection.addTrack(track, stream);
+    });
+
+    // Set up data channel for events
+    dataChannel = peerConnection.createDataChannel("oai-events");
+    console.log('Created data channel');
+
+    dataChannel.onopen = () => {
+        console.log('Data channel opened');
+    };
+    dataChannel.onclose = () => console.log('Data channel closed');
+    dataChannel.onerror = (error) => console.error('Data channel error:', error);
+    dataChannel.onmessage = handleMessage;
+
+    // Create and set local description
+    console.log('Creating offer...');
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    console.log('Set local description');
+
+    // Send offer to OpenAI and get answer
+    const baseUrl = "https://api.openai.com/v1/realtime";
+    const model = "gpt-4o-realtime-preview-2024-12-17";
+    console.log('Sending SDP to OpenAI...');
+    const sdpResponse = await fetch(`${baseUrl}?model=${model}`, {
+        method: "POST",
+        body: offer.sdp,
+        headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/sdp"
+        },
+    });
+
+    if (!sdpResponse.ok) {
+        const errorText = await sdpResponse.text();
+        console.error('SDP response error:', sdpResponse.status, errorText);
+        throw new Error(`Failed to get SDP answer: ${errorText}`);
+    }
+
+    const answer = {
+        type: "answer",
+        sdp: await sdpResponse.text(),
+    };
+    await peerConnection.setRemoteDescription(answer);
+    console.log('Set remote description');
+}
+
+function handleMessage(event) {
+    try {
+        const message = JSON.parse(event.data);
+        console.log('Message:', message.type, message);
+        const chatContainer = document.getElementById('chat-container');
+        
+        switch (message.type) {
+            case 'session.created':
+                console.log('Session created');
+                break;
+            case 'response.created':
+                // Create a new message div for the streaming response
+                const streamDiv = document.createElement('div');
+                streamDiv.id = `response-${message.response.id}`;
+                streamDiv.className = 'mb-2 p-2 bg-green-50 rounded';
+                streamDiv.textContent = 'Assistant: ';
+                chatContainer.appendChild(streamDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                break;
+            case 'response.text.delta':
+                // Append to the streaming message
+                const responseDiv = document.getElementById(`response-${message.response_id}`);
+                if (responseDiv) {
+                    responseDiv.textContent += message.delta;
+                    chatContainer.scrollTop = chatContainer.scrollHeight;
+                }
+                break;
+            case 'input_audio_buffer.speech_started':
+                const startDiv = document.createElement('div');
+                startDiv.className = 'mb-2 p-2 bg-blue-100 rounded';
+                startDiv.textContent = 'Speech detected...';
+                chatContainer.appendChild(startDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                break;
+            case 'input_audio_buffer.speech_stopped':
+            case 'input_audio_buffer.committed':
+            case 'response.content_part.done':
+            case 'response.text.done':
+            case 'response.output_item.done':
+            case 'response.output_item.added':
+            case 'conversation.item.created':
+            case 'response.content_part.added':
+            case 'rate_limits.updated':
+            case 'session.updated':
+                // These are status events we can ignore
+                break;
+            case 'response.done':
+                if (message.response.status === 'failed') {
+                    const error = message.response.status_details?.error;
+                    if (error?.type === 'insufficient_quota') {
+                        const errorDiv = document.createElement('div');
+                        errorDiv.className = 'mb-2 p-2 bg-red-100 rounded text-red-700';
+                        errorDiv.textContent = 'Error: OpenAI API quota exceeded. Please check your billing details.';
+                        chatContainer.appendChild(errorDiv);
+                        // Stop recording since we can't proceed
+                        document.getElementById('stopButton').click();
+                    }
+                }
+                break;
+            case 'text':
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'mb-2 p-2 bg-gray-100 rounded';
+                messageDiv.textContent = message.text;
+                chatContainer.appendChild(messageDiv);
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+                break;
+            case 'error':
+                console.error('Error from server:', message);
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'mb-2 p-2 bg-red-100 rounded text-red-700';
+                errorDiv.textContent = `Error: ${message.error?.message || 'Unknown error'}`;
+                chatContainer.appendChild(errorDiv);
+                break;
+            default:
+                console.log('Unhandled message type:', message.type);
+        }
+    } catch (error) {
+        console.error('Error handling message:', error);
+    }
+}
+
+async function startRecording() {
+    console.log('Starting recording...');
+    try {
+        // Send configuration event to start a new response
+        const configEvent = {
+            type: "response.create",
+            response: {
+                modalities: ["text"]
+            }
+        };
+        console.log('Sending response.create event:', configEvent);
+        dataChannel.send(JSON.stringify(configEvent));
+        
+        document.getElementById('startButton').classList.add('hidden');
+        document.getElementById('stopButton').classList.remove('hidden');
+    } catch (error) {
+        console.error('Error starting recording:', error);
+    }
+}
+
+function stopRecording() {
+    console.log('Stopping recording...');
+    document.getElementById('stopButton').classList.add('hidden');
+    document.getElementById('startButton').classList.remove('hidden');
+}
+
+// Event listeners
+document.getElementById('startButton').addEventListener('click', startRecording);
+document.getElementById('stopButton').addEventListener('click', stopRecording);
+
+// Initialize WebRTC when the page loads
+console.log('Page loaded, initializing WebRTC...');
+initWebRTC().catch(error => {
+    console.error('Failed to initialize WebRTC:', error);
+});
+</script>
+{% endblock %} 

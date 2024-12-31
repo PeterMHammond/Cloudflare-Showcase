@@ -7,6 +7,7 @@ use routes::{
     websocket::websocket::handler as websocket,
     study::handler as study,
     study_do::handler as study_do,
+    openai::handler as openai,
 };
 
 mod template;
@@ -21,6 +22,7 @@ mod routes {
     pub mod websocket_do;
     pub mod study;
     pub mod study_do;
+    pub mod openai;
 }
 
 #[event(fetch)]
@@ -28,7 +30,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     console_error_panic_hook::set_once();
     
     let router = Router::with_data(());
-
+    
     let response = router
         .get_async("/", index)
         .get_async("/favicon.ico", favicon)
@@ -37,6 +39,7 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/websocket", websocket)
         .get_async("/study", study)
         .get_async("/study_do", study_do)
+        .get_async("/openai", openai)
         .run(req, env)
         .await?;
 
