@@ -12,11 +12,8 @@
                 <!-- Chat messages will appear here -->
             </div>
             <div class="flex items-center gap-4">
-                <button id="startButton" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                    Start Recording
-                </button>
-                <button id="stopButton" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 hidden">
-                    Stop Recording
+                <button id="toggleButton" class="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed opacity-50" disabled>
+                    Start Listening
                 </button>
             </div>
         </div>
@@ -26,6 +23,8 @@
 <script>
 let peerConnection = null;
 let dataChannel = null;
+let isListening = false;
+let audioStream = null;
 
 async function initWebRTC() {
     console.log('Initializing WebRTC...');
@@ -44,17 +43,23 @@ async function initWebRTC() {
         audioEl.srcObject = e.streams[0];
     };
 
-    // Add local audio track for microphone input
-    const stream = await navigator.mediaDevices.getUserMedia({ 
+    // Request microphone access but don't add tracks yet
+    audioStream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
             echoCancellation: true,
             noiseSuppression: true,
             autoGainControl: true
         }
     });
-    stream.getTracks().forEach(track => {
+    // Initially mute all tracks
+    audioStream.getTracks().forEach(track => {
+        track.enabled = false;
+    });
+    
+    // Add tracks to peer connection
+    audioStream.getTracks().forEach(track => {
         console.log('Adding track:', track.kind, track.label);
-        peerConnection.addTrack(track, stream);
+        peerConnection.addTrack(track, audioStream);
     });
 
     // Set up data channel for events
@@ -104,12 +109,16 @@ async function initWebRTC() {
 function handleMessage(event) {
     try {
         const message = JSON.parse(event.data);
-        console.log('Message:', message.type, message);
+        // console.log('Message:', message.type, message);
         const chatContainer = document.getElementById('chat-container');
         
         switch (message.type) {
             case 'session.created':
                 console.log('Session created');
+                const button = document.getElementById('toggleButton');
+                button.disabled = false;
+                button.classList.remove('bg-gray-400', 'cursor-not-allowed', 'opacity-50');
+                button.classList.add('bg-blue-500', 'hover:bg-blue-600');
                 break;
             case 'response.created':
                 // Create a new message div for the streaming response
@@ -145,10 +154,9 @@ function handleMessage(event) {
             case 'response.content_part.added':
             case 'rate_limits.updated':
             case 'session.updated':
-                // These are status events we can ignore
-                break;
+            case 'response.audio_transcript.delta':
             case 'response.done':
-                if (message.response.status === 'failed') {
+                if (message.response && message.response.status === 'failed') {
                     const error = message.response.status_details?.error;
                     if (error?.type === 'insufficient_quota') {
                         const errorDiv = document.createElement('div');
@@ -156,7 +164,7 @@ function handleMessage(event) {
                         errorDiv.textContent = 'Error: OpenAI API quota exceeded. Please check your billing details.';
                         chatContainer.appendChild(errorDiv);
                         // Stop recording since we can't proceed
-                        document.getElementById('stopButton').click();
+                        document.getElementById('toggleButton').click();
                     }
                 }
                 break;
@@ -182,35 +190,53 @@ function handleMessage(event) {
     }
 }
 
-async function startRecording() {
-    console.log('Starting recording...');
-    try {
-        // Send configuration event to start a new response
-        const configEvent = {
-            type: "response.create",
-            response: {
-                modalities: ["text"]
-            }
-        };
-        console.log('Sending response.create event:', configEvent);
-        dataChannel.send(JSON.stringify(configEvent));
+async function toggleRecording() {
+    if (!isListening) {
+        console.log('Starting recording...');
+        try {
+            // Enable audio tracks
+            audioStream.getTracks().forEach(track => {
+                track.enabled = true;
+            });
+            
+            const configEvent = {
+                type: "response.create",
+                response: {
+                    modalities: ["text"]
+                }
+            };
+            console.log('Sending response.create event:', configEvent);
+            dataChannel.send(JSON.stringify(configEvent));
+            
+            const button = document.getElementById('toggleButton');
+            button.textContent = 'Stop Listening';
+            button.classList.remove('bg-blue-500', 'hover:bg-blue-600');
+            button.classList.add('bg-red-500', 'hover:bg-red-600');
+            isListening = true;
+        } catch (error) {
+            console.error('Error starting recording:', error);
+            const button = document.getElementById('toggleButton');
+            button.textContent = 'Start Listening';
+            button.classList.remove('bg-red-500', 'hover:bg-red-600');
+            button.classList.add('bg-blue-500', 'hover:bg-blue-600');
+        }
+    } else {
+        console.log('Stopping recording...');
+        // Disable audio tracks
+        audioStream.getTracks().forEach(track => {
+            track.enabled = false;
+        });
         
-        document.getElementById('startButton').classList.add('hidden');
-        document.getElementById('stopButton').classList.remove('hidden');
-    } catch (error) {
-        console.error('Error starting recording:', error);
+        const button = document.getElementById('toggleButton');
+        button.textContent = 'Start Listening';
+        button.classList.remove('bg-red-500', 'hover:bg-red-600');
+        button.classList.add('bg-blue-500', 'hover:bg-blue-600');
+        isListening = false;
     }
 }
 
-function stopRecording() {
-    console.log('Stopping recording...');
-    document.getElementById('stopButton').classList.add('hidden');
-    document.getElementById('startButton').classList.remove('hidden');
-}
-
 // Event listeners
-document.getElementById('startButton').addEventListener('click', startRecording);
-document.getElementById('stopButton').addEventListener('click', stopRecording);
+document.getElementById('toggleButton').addEventListener('click', toggleRecording);
 
 // Initialize WebRTC when the page loads
 console.log('Page loaded, initializing WebRTC...');
