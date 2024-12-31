@@ -1,27 +1,20 @@
 use askama::Template;
 use worker::*;
 use serde_json::{json, Value};
-use crate::template::{BaseTemplate, DefaultBaseTemplate};
 
 #[derive(Template)]
 #[template(path = "openai.html")]
-pub struct OpenAITemplate {
-    inner: DefaultBaseTemplate,
+struct OpenAITemplate {
+    title: String,
+    page_title: String,
+    current_year: String,
+    version: String,
     token: String,
-}
-
-impl BaseTemplate for OpenAITemplate {
-    fn title(&self) -> &str { self.inner.title() }
-    fn page_title(&self) -> &str { self.inner.page_title() }
-    fn current_year(&self) -> &str { self.inner.current_year() }
-    fn version(&self) -> &str { self.inner.version() }
 }
 
 pub async fn handler(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     match req.method() {
         Method::Get => {
-            let base = DefaultBaseTemplate::default();
-            
             let api_key = ctx.env.secret("OPENAI_API_KEY")?.to_string();
             
             let client = reqwest::Client::new();
@@ -47,8 +40,11 @@ pub async fn handler(req: Request, ctx: RouteContext<()>) -> Result<Response> {
                 return Response::error(error_text, 500);
             };
 
-            let template = OpenAITemplate { 
-                inner: base,
+            let template = OpenAITemplate {
+                title: "OpenAI - Cloudflare Showcase".to_string(),
+                page_title: "OpenAI".to_string(),
+                current_year: "2024".to_string(),
+                version: option_env!("CARGO_PKG_VERSION").unwrap_or_default().to_string(),
                 token,
             };
 

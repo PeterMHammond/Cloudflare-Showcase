@@ -4,13 +4,12 @@ use routes::{
     index::handler as index,
     favicon::handler as favicon,
     websocket_do::handler as websocket_do,
-    websocket::websocket::handler as websocket,
+    websocket::handler as websocket,
     study::handler as study,
     study_do::handler as study_do,
     openai::handler as openai,
 };
 
-mod template;
 pub mod utils {
     pub mod scripture;
 }

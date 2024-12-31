@@ -1,30 +1,25 @@
+use askama::Template;
 use worker::*;
 
-// For development usage to show information about the application TODO: remove this before production deployment
-pub async fn handler(req: Request, _ctx: RouteContext<()>) -> Result<Response> {
-    let url = req.url()?;
-    let root_url = format!("{}://{}/", url.scheme(), url.host_str().unwrap_or("localhost"));
+#[derive(Template)]
+#[template(path = "about.html")]
+struct AboutTemplate {
+    title: String,
+    page_title: String,
+    current_year: String,
+    version: String,
+}
 
-    let version = option_env!("CARGO_PKG_VERSION").unwrap_or_default();
-    let name = option_env!("CARGO_PKG_NAME").unwrap_or_default();
-    let authors = option_env!("CARGO_PKG_AUTHORS").unwrap_or_default();
-    let description = option_env!("CARGO_PKG_DESCRIPTION").unwrap_or_default();
-    let repository = option_env!("CARGO_PKG_REPOSITORY").unwrap_or_default();
-    let license = option_env!("CARGO_PKG_LICENSE").unwrap_or_default();
+pub async fn handler(_req: Request, _ctx: RouteContext<()>) -> Result<Response> {
+    let template = AboutTemplate {
+        title: "About - Cloudflare Showcase".to_string(),
+        page_title: "About".to_string(),
+        current_year: "2024".to_string(),
+        version: option_env!("CARGO_PKG_VERSION").unwrap_or_default().to_string(),
+    };
 
-    let response_body = format!(
-        "Package: {name}\n\
-        Version: {version}\n\
-        Authors: {authors}\n\
-        Description: {description}\n\
-        Repository: {repository}\n\
-        License: {license}\n\
-        Current Route: {url}\n\n\
-        Available Routes:\n\
-        - GET /\n    Dashboard/Home page\n    Example: curl -X GET {root_url}\n\
-        - GET /websocket\n    WebSocket demonstration page\n    Example: curl -X GET {root_url}websocket\n\
-        - GET /about\n    Shows this diagnostic information\n    Example: curl -X GET {root_url}about\n"
-    );
-
-    Response::ok(response_body)
+    match template.render() {
+        Ok(html) => Response::from_html(html),
+        Err(err) => Response::error(format!("Failed to render template: {}", err), 500),
+    }
 } 

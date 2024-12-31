@@ -4,19 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
-    <title>{{ self.title() }}</title>
+    <title>{{ title }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>
 </head>
 <body class="h-full min-h-screen bg-[#e8e6de] grid grid-rows-[auto,auto,1fr,auto] md:grid-rows-[auto,1fr,auto] md:grid-cols-[200px,1fr] grid-cols-1 gap-4 p-4">
-    {% include "components/header.html" %}
+    <header class="col-span-1 md:col-span-2 bg-white p-4 rounded-lg flex justify-between items-center">
+        <h1 class="text-2xl font-bold md:hidden">{{ page_title }}</h1>
+        <nav class="hidden md:block">
+            <ul class="flex space-x-4">
+                <li><a href="/" class="hover:text-blue-600">Home</a></li>
+                <li><a href="https://github.com/PeterMHammond" target="_blank" class="hover:text-blue-600">Peter Hammond's GitHub</a></li>
+                <li><a href="/about" class="hover:text-blue-600">About</a></li>
+            </ul>
+        </nav>
+    </header>
+
     {% include "components/sidebar.html" %}
 
     <main class="bg-white rounded-lg row-span-1 md:row-start-2 h-full">
         {% block content %}{% endblock %}
     </main>
 
-    {% include "components/footer.html" %}
+    <footer class="col-span-1 md:col-span-2 bg-white p-4 rounded-lg flex flex-col md:flex-row justify-between items-center space-y-2 md:space-y-0">
+        <p>&copy; {{ current_year }} Cloudflare Showcase</p>
+        <p>Built with Rust for Cloudflare Workers (Showcase v{{ version }})</p>
+    </footer>
 </body>
 </html> 
