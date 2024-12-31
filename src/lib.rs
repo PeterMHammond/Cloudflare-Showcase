@@ -14,7 +14,7 @@ mod template;
 pub mod utils {
     pub mod scripture;
 }
-mod routes {
+pub mod routes {
     pub mod about;
     pub mod index;
     pub mod favicon;

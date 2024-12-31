@@ -1,23 +1,26 @@
-use worker::*;
 use askama::Template;
+use worker::*;
 use crate::template::{BaseTemplate, DefaultBaseTemplate};
 
 #[derive(Template)]
 #[template(path = "study.html")]
 struct StudyTemplate {
-    inner: DefaultBaseTemplate,
+    base: DefaultBaseTemplate,
 }
 
 impl BaseTemplate for StudyTemplate {
-    fn title(&self) -> &str { self.inner.title() }
-    fn page_title(&self) -> &str { self.inner.page_title() }
-    fn current_year(&self) -> &str { self.inner.current_year() }
-    fn version(&self) -> &str { self.inner.version() }
+    fn title(&self) -> &str { self.base.title() }
+    fn page_title(&self) -> &str { self.base.page_title() }
+    fn current_year(&self) -> &str { self.base.current_year() }
+    fn version(&self) -> &str { self.base.version() }
 }
 
 pub async fn handler(_req: Request, _ctx: RouteContext<()>) -> Result<Response> {
-    let base = DefaultBaseTemplate::default();
-    let template = StudyTemplate { inner: base };
+    let mut base = DefaultBaseTemplate::default();
+    base.title = "Study - Cloudflare Showcase".to_string();
+    base.page_title = "Study".to_string();
+
+    let template = StudyTemplate { base };
 
     match template.render() {
         Ok(html) => Response::from_html(html),
