@@ -1,15 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="h-full p-8" data-token="{{ token }}">
+<div class="h-full p-8" data-token="{{ token }}" data-expiry="{{ expiry }}">
     <h2 class="text-xl font-semibold mb-4">OpenAI Voice Chat Demo</h2>
     <div class="max-w-2xl mx-auto">
         <div class="bg-white rounded-lg shadow p-6">
             <div class="mb-4 p-4 bg-gray-100 rounded">
                 <p class="text-sm font-mono break-all">Token: {{ token }}</p>
+                <p class="text-sm text-gray-600">Expires: <span id="expiryTime"></span></p>
             </div>
             <div id="chat-container" class="mb-4 h-64 overflow-y-auto border rounded p-4">
-                <!-- Chat messages will appear here -->
             </div>
             <div class="flex items-center gap-4">
                 <button id="toggleButton" class="bg-gray-400 text-white px-4 py-2 rounded cursor-not-allowed opacity-50" disabled>
@@ -26,16 +26,79 @@ let dataChannel = null;
 let isListening = false;
 let audioStream = null;
 
+function updateExpiryDisplay() {
+    const expiryElement = document.getElementById('expiryTime');
+    const expiryTimestamp = parseInt(document.querySelector('[data-expiry]').dataset.expiry, 10);
+    const now = Math.floor(Date.now() / 1000);
+    const timeLeft = expiryTimestamp - now;
+    
+    if (timeLeft <= 0) {
+        expiryElement.textContent = 'Expired';
+        expiryElement.classList.add('text-red-600');
+        return false;
+    }
+    
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
+    expiryElement.textContent = `${minutes}m ${seconds}s`;
+    return true;
+}
+
+async function refreshToken() {
+    try {
+        const response = await fetch('/openai', {
+            method: 'GET',
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to refresh token');
+        }
+
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newTokenData = doc.querySelector('[data-token]');
+        
+        if (newTokenData) {
+            const tokenContainer = document.querySelector('[data-token]');
+            tokenContainer.dataset.token = newTokenData.dataset.token;
+            tokenContainer.dataset.expiry = newTokenData.dataset.expiry;
+            
+            const tokenDisplay = document.querySelector('.font-mono');
+            if (tokenDisplay) {
+                tokenDisplay.textContent = `Token: ${newTokenData.dataset.token}`;
+            }
+            
+            return newTokenData.dataset.token;
+        }
+        throw new Error('Could not find token in response');
+    } catch (error) {
+        console.error('Error refreshing token:', error);
+        throw error;
+    }
+}
+
+async function getValidToken() {
+    const tokenData = document.querySelector('[data-token]');
+    const token = tokenData.dataset.token;
+    const expiry = parseInt(tokenData.dataset.expiry, 10);
+    const now = Math.floor(Date.now() / 1000);
+
+    if (now < expiry - 30) {
+        return token;
+    }
+
+    return await refreshToken();
+}
+
 async function initWebRTC() {
     console.log('Initializing WebRTC...');
-    const token = document.querySelector('[data-token]').dataset.token;
+    const token = await getValidToken();
     console.log('Got token:', token.substring(0, 10) + '...');
     
-    // Create a peer connection
     peerConnection = new RTCPeerConnection();
     console.log('Created peer connection');
 
-    // Set up audio element for model's audio output
     const audioEl = document.createElement("audio");
     audioEl.autoplay = true;
     peerConnection.ontrack = e => {
@@ -43,7 +106,6 @@ async function initWebRTC() {
         audioEl.srcObject = e.streams[0];
     };
 
-    // Request microphone access but don't add tracks yet
     audioStream = await navigator.mediaDevices.getUserMedia({ 
         audio: {
             echoCancellation: true,
@@ -51,18 +113,15 @@ async function initWebRTC() {
             autoGainControl: true
         }
     });
-    // Initially mute all tracks
     audioStream.getTracks().forEach(track => {
         track.enabled = false;
     });
     
-    // Add tracks to peer connection
     audioStream.getTracks().forEach(track => {
         console.log('Adding track:', track.kind, track.label);
         peerConnection.addTrack(track, audioStream);
     });
 
-    // Set up data channel for events
     dataChannel = peerConnection.createDataChannel("oai-events");
     console.log('Created data channel');
 
@@ -73,13 +132,11 @@ async function initWebRTC() {
     dataChannel.onerror = (error) => console.error('Data channel error:', error);
     dataChannel.onmessage = handleMessage;
 
-    // Create and set local description
     console.log('Creating offer...');
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
     console.log('Set local description');
 
-    // Send offer to OpenAI and get answer
     const baseUrl = "https://api.openai.com/v1/realtime";
     const model = "gpt-4o-realtime-preview-2024-12-17";
     console.log('Sending SDP to OpenAI...');
@@ -109,7 +166,6 @@ async function initWebRTC() {
 function handleMessage(event) {
     try {
         const message = JSON.parse(event.data);
-        // console.log('Message:', message.type, message);
         const chatContainer = document.getElementById('chat-container');
         
         switch (message.type) {
@@ -121,7 +177,6 @@ function handleMessage(event) {
                 button.classList.add('bg-blue-500', 'hover:bg-blue-600');
                 break;
             case 'response.created':
-                // Create a new message div for the streaming response
                 const streamDiv = document.createElement('div');
                 streamDiv.id = `response-${message.response.id}`;
                 streamDiv.className = 'mb-2 p-2 bg-green-50 rounded';
@@ -130,7 +185,6 @@ function handleMessage(event) {
                 chatContainer.scrollTop = chatContainer.scrollHeight;
                 break;
             case 'response.text.delta':
-                // Append to the streaming message
                 const responseDiv = document.getElementById(`response-${message.response_id}`);
                 if (responseDiv) {
                     responseDiv.textContent += message.delta;
@@ -156,16 +210,13 @@ function handleMessage(event) {
             case 'session.updated':
             case 'response.audio_transcript.delta':
             case 'response.done':
-                if (message.response && message.response.status === 'failed') {
-                    const error = message.response.status_details?.error;
-                    if (error?.type === 'insufficient_quota') {
-                        const errorDiv = document.createElement('div');
-                        errorDiv.className = 'mb-2 p-2 bg-red-100 rounded text-red-700';
-                        errorDiv.textContent = 'Error: OpenAI API quota exceeded. Please check your billing details.';
-                        chatContainer.appendChild(errorDiv);
-                        // Stop recording since we can't proceed
-                        document.getElementById('toggleButton').click();
-                    }
+                console.log('Response done:', message);
+                if (message.response?.status === 'failed') {
+                    const responseErrorDiv = document.createElement('div');
+                    responseErrorDiv.className = 'mb-2 p-2 bg-red-100 rounded text-red-700';
+                    responseErrorDiv.textContent = `Error: ${message.response?.status_details?.error?.message || 'Unknown error'}`;
+                    chatContainer.appendChild(responseErrorDiv);
+                    document.getElementById('toggleButton').click();
                 }
                 break;
             case 'text':
@@ -194,7 +245,11 @@ async function toggleRecording() {
     if (!isListening) {
         console.log('Starting recording...');
         try {
-            // Enable audio tracks
+            const token = await getValidToken();
+            if (!token) {
+                throw new Error('Failed to get valid token');
+            }
+            
             audioStream.getTracks().forEach(track => {
                 track.enabled = true;
             });
@@ -222,7 +277,6 @@ async function toggleRecording() {
         }
     } else {
         console.log('Stopping recording...');
-        // Disable audio tracks
         audioStream.getTracks().forEach(track => {
             track.enabled = false;
         });
@@ -235,10 +289,11 @@ async function toggleRecording() {
     }
 }
 
-// Event listeners
 document.getElementById('toggleButton').addEventListener('click', toggleRecording);
 
-// Initialize WebRTC when the page loads
+setInterval(updateExpiryDisplay, 1000);
+updateExpiryDisplay();
+
 console.log('Page loaded, initializing WebRTC...');
 initWebRTC().catch(error => {
     console.error('Failed to initialize WebRTC:', error);
