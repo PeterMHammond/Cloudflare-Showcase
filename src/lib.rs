@@ -8,10 +8,33 @@ use routes::{
     study::handler as study,
     study_do::handler as study_do,
     openai::handler as openai,
+    turnstile,
 };
+
+pub struct BaseTemplate {
+    pub title: String,
+    pub page_title: String,
+    pub current_year: String,
+    pub version: String,
+    pub site_key: String,
+}
+
+impl BaseTemplate {
+    pub async fn new(ctx: &RouteContext<()>, title: &str, page_title: &str) -> Result<Self> {
+        let site_key = ctx.env.secret("TURNSTILE_SITE_KEY")?.to_string();
+        Ok(Self {
+            title: title.to_string(),
+            page_title: page_title.to_string(),
+            current_year: "2024".to_string(),
+            version: option_env!("CARGO_PKG_VERSION").unwrap_or_default().to_string(),
+            site_key,
+        })
+    }
+}
 
 pub mod utils {
     pub mod scripture;
+    pub mod turnstile;
 }
 pub mod routes {
     pub mod about;
@@ -22,6 +45,7 @@ pub mod routes {
     pub mod study;
     pub mod study_do;
     pub mod openai;
+    pub mod turnstile;
 }
 
 #[event(fetch)]
@@ -39,6 +63,8 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/study", study)
         .get_async("/study_do", study_do)
         .get_async("/openai", openai)
+        .get_async("/turnstile", turnstile::get_handler)
+        .post_async("/turnstile", turnstile::post_handler)
         .run(req, env)
         .await?;
 

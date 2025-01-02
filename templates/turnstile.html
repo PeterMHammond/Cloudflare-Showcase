@@ -1,79 +1,113 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="p-8">
-    <h1 class="text-3xl font-bold mb-8">{{ page_title }}</h1>
-    
-    <div class="max-w-2xl mx-auto">
-        <div class="bg-gray-50 p-6 rounded-lg shadow-sm mb-8">
-            <h2 class="text-xl font-semibold mb-4">Turnstile Configuration</h2>
-            <div class="space-y-2 mb-6 font-mono text-sm bg-gray-100 p-4 rounded">
-                <p><span class="font-semibold">Site Key:</span> {{ site_key }}</p>
-                <p><span class="font-semibold">Widget Mode:</span> Interactive</p>
-                <p><span class="font-semibold">Theme:</span> Light</p>
-                <p><span class="font-semibold">Size:</span> Normal</p>
-                <p><span class="font-semibold">Action:</span> turnstile/test</p>
-            </div>
-
-            <h2 class="text-xl font-semibold mb-4">Test Form</h2>
-            <form id="turnstileForm" class="space-y-6" hx-post="/turnstile" hx-swap="none">
-                <div id="turnstile-widget"></div>
-                
-                <div>
-                    <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors">
-                        Server Validate Turnstile
-                    </button>
-                </div>
-            </form>
+<section class="p-8">
+    <h1 class="text-3xl font-bold mb-8">{{ base.page_title }}</h1>    
+    <p class="mt-2 text-sm text-gray-600">Current site validation status: <span id="validationStatus">Checking...</span></p>
+    <section class="grid grid-cols-1 md:grid-cols-[min-content_auto] gap-1 max-w-screen-lg w-full">
+        <div class="flex flex-col gap-1">
+            <article>
+                <div class="cf-turnstile" 
+                    id="myTurnstile1"
+                    data-sitekey="{{ base.site_key }}" 
+                    data-size="normal"
+                    data-callback="onTurnstileCallback"                      
+                    data-theme="light"></div>
+            </article>
+            <article>
+                <form id="turnstileForm" name="turnstileForm" hx-post="/turnstile" hx-swap="none">
+                    <div class="cf-turnstile" 
+                        id="myTurnstile2"
+                        data-sitekey="{{ base.site_key }}" 
+                        data-size="normal" 
+                        data-callback="onTurnstileCallback"
+                        data-theme="dark"></div>
+                        <button class="hover:underline" name="turnstileButton" type="submit" >Server Validation</button>
+                </form>
+                Reset :
+                <button class="hover:underline" onclick="resetTurnstileById('myTurnstile1')">Turnstile 1</button> |
+                <button class="hover:underline" onclick="resetTurnstileById('myTurnstile2')">Turnstile 2</button> |
+                <button class="hover:underline" onclick="resetTurnstileById('myTurnstile3')">Turnstile 3</button>
+            </article>            
+        </div>    
+        <div class="self-start">
+            <div class="cf-turnstile" 
+                id="myTurnstile3"
+                data-sitekey="{{ base.site_key }}" 
+                data-callback="onTurnstileCallback" 
+                data-size="compact"></div>
         </div>
+    </section>    
 
-        <div id="result" class="hidden rounded-lg p-4 mb-8">
-            <!-- Result will be shown here -->
-        </div>
-
-        <div class="bg-gray-50 p-6 rounded-lg shadow-sm">
-            <h2 class="text-xl font-semibold mb-4">Response Details</h2>
-            <pre id="responseDetails" class="bg-gray-100 p-4 rounded overflow-x-auto text-sm">
-                Waiting for validation...
-            </pre>
-        </div>
-    </div>
-</div>
+    <h2 class="font-semibold">Debug Log</h2>
+    <div id="debuglog" class="font-mono text-sm bg-gray-50 text-gray-800 border border-gray-300 p-4 w-full max-h-80 overflow-y-auto break-words whitespace-pre-wrap"></div>
+</section>
 
 <script>
-    // Define the onTurnstileLoad callback that the script is looking for
-    window.onTurnstileLoad = function() {
-        turnstile.render('#turnstile-widget', {
-            sitekey: '{{ site_key }}',
-            theme: 'light',
-            action: 'turnstile/test',
-            callback: function(token) {
-                console.log('Test Turnstile token:', token);
-            }
-        });
+    logDebugMessage('Debugging initialized...');
+    updateValidationStatus();
+
+    function logDebugMessage(message) {
+        const debuglog = document.getElementById('debuglog');
+        const timestamp = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+        debuglog.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+        debuglog.scrollTop = debuglog.scrollHeight;
+    }
+    function onTurnstileCallback(token) {
+        logDebugMessage('Turnstile Widget callback: ' + token.substring(0, 20) + '...');
+        localStorage.setItem("turnstileValidated", token);
+    }
+    function updateValidationStatus() {
+        const status = document.getElementById('validationStatus');
+        const token = localStorage.getItem('turnstileValidated');
+        if (token) {
+            status.textContent = 'Validated';
+            status.className = 'text-green-600 font-semibold';
+            logDebugMessage(`LocalStorage Token: ${token.substring(0, 20)}...`);
+        } else {
+            status.textContent = 'Not Validated';
+            status.className = 'text-red-600 font-semibold';
+        }
+    }
+
+    function resetTurnstile() {
+        localStorage.removeItem('turnstileValidated');
+        window.location.reload();
+    }
+
+    window.addEventListener('storage', function(e) {
+        if (e.key === 'turnstileValidated') {
+            updateValidationStatus();
+        }
+    });
+
+    const originalSetItem = localStorage.setItem;
+    localStorage.setItem = function(key, value) {
+        originalSetItem.apply(this, arguments);
+        if (key === 'turnstileValidated') {
+            updateValidationStatus();
+        }
     };
 
     document.getElementById('turnstileForm').addEventListener('htmx:afterRequest', function(event) {
-        const resultDiv = document.getElementById('result');
-        const responseDetails = document.getElementById('responseDetails');
-        resultDiv.classList.remove('hidden', 'bg-green-100', 'bg-red-100');
-        
         try {
             const response = JSON.parse(event.detail.xhr.response);
-            responseDetails.textContent = JSON.stringify(response, null, 2);
             
             if (response.success) {
-                resultDiv.classList.add('bg-green-100');
-                resultDiv.innerHTML = '<p class="text-green-800">✓ Turnstile validation successful!</p>';
+                logDebugMessage('✓ Turnstile validation successful!');
             } else {
-                resultDiv.classList.add('bg-red-100');
-                resultDiv.innerHTML = '<p class="text-red-800">✗ Turnstile validation failed.</p>';
+                const errorCode = response['error-codes']?.[0] || 'unknown error';
+                logDebugMessage(`✗ Turnstile validation failed: ${errorCode}`, 'error');
             }
         } catch (e) {
-            resultDiv.classList.add('bg-red-100');
-            resultDiv.innerHTML = '<p class="text-red-800">✗ Error processing response.</p>';
-            responseDetails.textContent = 'Error parsing response: ' + e.message;
+            logDebugMessage('✗ Error parsing response: ' + e.message);
         }
     });
+
+    function resetTurnstileById(id) {
+        localStorage.removeItem('turnstileValidated');
+        updateValidationStatus();
+        turnstile.reset(document.getElementById(id));
+    }
 </script>
 {% endblock %} 

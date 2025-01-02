@@ -2,6 +2,7 @@ use askama::Template;
 use worker::*;
 use serde_json::{json, Value};
 use serde::{Deserialize, Serialize};
+use crate::BaseTemplate;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ClientSecret {
@@ -43,10 +44,8 @@ struct OpenAISessionResponse {
 #[derive(Template)]
 #[template(path = "openai.html")]
 struct OpenAITemplate {
-    title: String,
-    page_title: String,
-    current_year: String,
-    version: String,
+    #[template(name = "base")]
+    base: BaseTemplate,
     token: String,
     expiry: String,
 }
@@ -84,13 +83,11 @@ pub async fn handler(req: Request, ctx: RouteContext<()>) -> Result<Response> {
     }
 
     let session: OpenAISessionResponse = response.json().await.map_err(|e| Error::from(e.to_string()))?;
-    // console_log!("OpenAI API Response: {:?}", session);
 
+    let base = BaseTemplate::new(&ctx, "OpenAI - Cloudflare Showcase", "OpenAI").await?;
+    
     let template = OpenAITemplate {
-        title: "OpenAI - Cloudflare Showcase".to_string(),
-        page_title: "OpenAI".to_string(),
-        current_year: "2024".to_string(),
-        version: option_env!("CARGO_PKG_VERSION").unwrap_or_default().to_string(),
+        base,
         token: session.client_secret.value.clone(),
         expiry: session.client_secret.expires_at.to_string(),
     };
