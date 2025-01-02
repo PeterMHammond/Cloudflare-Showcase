@@ -1,47 +1,48 @@
 {% extends "base.html" %}
 
 {% block content %}
-<section class="p-8">
+<main class="p-8">
     <h1 class="text-3xl font-bold mb-8">{{ base.page_title }}</h1>    
     <p class="mt-2 text-sm text-gray-600">Current site validation status: <span id="validationStatus">Checking...</span></p>
-    <section class="grid grid-cols-1 md:grid-cols-[min-content_auto] gap-1 max-w-screen-lg w-full">
-        <div class="flex flex-col gap-1">
-            <article>
+    <section class="turnstile-container grid grid-cols-1 md:grid-cols-[300px_auto] gap-1 max-w-screen-lg w-full">
+        <article class="turnstile-controls flex flex-col gap-1 w-[300px] h-[146px]">
+            <div class="turnstile-widget-primary">
                 <div class="cf-turnstile" 
                     id="myTurnstile1"
                     data-sitekey="{{ base.site_key }}" 
                     data-size="normal"
                     data-callback="onTurnstileCallback"                      
                     data-theme="light"></div>
-            </article>
-            <article>
-                <form id="turnstileForm" name="turnstileForm" hx-post="/turnstile" hx-swap="none">
-                    <div class="cf-turnstile" 
-                        id="myTurnstile2"
-                        data-sitekey="{{ base.site_key }}" 
-                        data-size="normal" 
-                        data-callback="onTurnstileCallback"
-                        data-theme="dark"></div>
-                        <button class="hover:underline" name="turnstileButton" type="submit" >Server Validation</button>
-                </form>
-                Reset :
-                <button class="hover:underline" onclick="resetTurnstileById('myTurnstile1')">Turnstile 1</button> |
-                <button class="hover:underline" onclick="resetTurnstileById('myTurnstile2')">Turnstile 2</button> |
-                <button class="hover:underline" onclick="resetTurnstileById('myTurnstile3')">Turnstile 3</button>
-            </article>            
-        </div>    
-        <div class="self-start">
+            </div>
+            <div class="turnstile-form-wrapper">
+                <div class="cf-turnstile" 
+                id="myTurnstile2"
+                data-sitekey="{{ base.site_key }}" 
+                data-size="normal" 
+                data-callback="onTurnstileCallback"
+                data-theme="dark"></div>
+            </div>            
+        </article>    
+        <article class="turnstile-compact self-start w-[300px]">
             <div class="cf-turnstile" 
                 id="myTurnstile3"
                 data-sitekey="{{ base.site_key }}" 
                 data-callback="onTurnstileCallback" 
                 data-size="compact"></div>
-        </div>
+        </article>
     </section>    
-
-    <h2 class="font-semibold">Debug Log</h2>
-    <div id="debuglog" class="font-mono text-sm bg-gray-50 text-gray-800 border border-gray-300 p-4 w-full max-h-80 overflow-y-auto break-words whitespace-pre-wrap"></div>
-</section>
+    <form id="turnstileForm" name="turnstileForm" hx-post="/turnstile" hx-swap="none">
+        <button class="hover:underline" name="turnstileButton" type="submit" >Server Validation</button>
+    </form>
+    Reset :
+    <button class="hover:underline" onclick="resetTurnstileById('myTurnstile1')">Turnstile 1</button> |
+    <button class="hover:underline" onclick="resetTurnstileById('myTurnstile2')">Turnstile 2</button> |
+    <button class="hover:underline" onclick="resetTurnstileById('myTurnstile3')">Turnstile 3</button>
+    <section class="debug-section p-4">
+        <h2 class="font-semibold">Debug Log</h2>
+        <output id="debuglog" class="debug-log font-mono text-sm w-full overflow-y-auto break-words whitespace-pre-wrap"></output>
+    </section>
+</main>
 
 <script>
     logDebugMessage('Debugging initialized...');
@@ -50,7 +51,8 @@
     function logDebugMessage(message) {
         const debuglog = document.getElementById('debuglog');
         const timestamp = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-        debuglog.innerHTML += `<div>[${timestamp}] ${message}</div>`;
+        const formattedMessage = message.replace(/(.{80})/g, '$1\n');
+        debuglog.innerHTML += `<div class="debug-entry">[${timestamp}] ${formattedMessage}</div>`;
         debuglog.scrollTop = debuglog.scrollHeight;
     }
     function onTurnstileCallback(token) {

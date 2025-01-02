@@ -1,6 +1,6 @@
 [package]
 name = "showcase"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2021"
 authors = [ "Peter Hammond <https://github.com/PeterMHammond>" ]
 description = "A showcase of Cloudflare Workers capabilities using Rust, demonstrating routing and API functionality"
