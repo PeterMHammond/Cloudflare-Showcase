@@ -1,11 +1,18 @@
 use worker::*;
-use serde_json::Value;
+use serde::Deserialize;
+
+#[derive(Deserialize)]
+pub struct TurnstileResponse {
+    pub success: bool,
+    #[serde(rename = "error-codes")]
+    pub error_codes: Option<Vec<String>>,
+}
 
 pub async fn validate_turnstile_token(
     token: &str,
     secret_key: &str,
     user_ip: Option<&str>,
-) -> Result<Value> {
+) -> Result<TurnstileResponse> {
     let api_url = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
 
     let mut form_data = vec![
@@ -23,10 +30,16 @@ pub async fn validate_turnstile_token(
         .form(&form_data)
         .send()
         .await
-        .map_err(|e| Error::from(format!("Failed to call Turnstile API: {}", e)))?;
+        .map_err(|e| {
+            console_error!("Failed to call Turnstile API: {}", e);
+            Error::from(format!("Failed to call Turnstile API: {}", e))
+        })?;
 
     response
-        .json()
+        .json::<TurnstileResponse>()
         .await
-        .map_err(|e| Error::from(format!("Invalid Turnstile response: {}", e)))
+        .map_err(|e| {
+            console_error!("Invalid Turnstile response: {}", e);
+            Error::from(format!("Invalid Turnstile response: {}", e))
+        })
 } 

@@ -14,14 +14,15 @@ use routes::{
 pub struct BaseTemplate {
     pub title: String,
     pub page_title: String,
+    pub site_key: String,
     pub current_year: String,
     pub version: String,
-    pub site_key: String,
 }
 
 impl BaseTemplate {
     pub async fn new(ctx: &RouteContext<()>, title: &str, page_title: &str) -> Result<Self> {
         let site_key = ctx.env.secret("TURNSTILE_SITE_KEY")?.to_string();
+        
         Ok(Self {
             title: title.to_string(),
             page_title: page_title.to_string(),

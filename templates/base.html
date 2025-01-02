@@ -7,14 +7,14 @@
     <title>{{ base.title }}</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>    
+    <script src="https://unpkg.com/htmx.org/dist/ext/ws.js"></script>
 </head>
 <body class="h-full min-h-screen bg-[#e8e6de] grid grid-rows-[auto,auto,1fr,auto] md:grid-rows-[auto,1fr,auto] md:grid-cols-[200px,1fr] grid-cols-1 gap-4 p-4">
     <!-- Turnstile Full-Screen Overlay -->
     <div id="turnstile-overlay" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
         <div class="bg-white p-6 rounded-lg shadow-lg flex flex-col items-center">
             <h1 class="mb-4 text-lg font-semibold text-gray-700">Verify You Are Human</h1>
-            <div class="cf-turnstile" data-sitekey="{{ base.site_key }}" data-callback="onTurnstileSuccess"></div>
+            <div id="turnstile-widget"></div>
         </div>
     </div>
 
@@ -43,21 +43,163 @@
 
     <!-- Scripts at the end of body -->
     <script>
-        function onTurnstileSuccess(token) {
-            localStorage.setItem("turnstileValidated", token);
-            document.getElementById("turnstile-overlay").classList.add("hidden");
-        }
-        window.onload = function() {
-            const overlay = document.getElementById("turnstile-overlay");
-            if (!localStorage.getItem("turnstileValidated")) {
-                overlay.classList.remove("hidden");
-                turnstile.render(overlay.querySelector('.cf-turnstile'), {
-                    sitekey: '{{ base.site_key }}',
-                    callback: onTurnstileSuccess
+        // Create a namespace for Turnstile functionality
+        const TurnstileManager = {
+            widget: null,
+            storageKey: 'turnstileValidatedToken',
+            
+            log(level, ...args) {
+                if (level === 'error') {
+                    console[level]('[Turnstile]', ...args);
+                }
+            },
+
+            clearValidation() {
+                sessionStorage.removeItem(this.storageKey);
+                this.log('info', 'Validation cleared');
+            },
+
+            isValidated() {
+                return !!sessionStorage.getItem(this.storageKey);
+            },
+
+            setValidated(token) {
+                sessionStorage.setItem(this.storageKey, token);
+                this.log('info', 'Token stored in session');
+            },
+
+            onTurnstileSuccess(token) {
+                this.log('info', 'Callback triggered');
+                
+                if (!token) {
+                    this.log('error', 'No token received');
+                    return;
+                }
+
+                this.log('info', 'Validating token with server...');
+                fetch('/turnstile', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ token }),
+                })
+                .then((response) => {
+                    this.log('info', 'Server response status:', response.status);
+                    if (!response.ok) {
+                        throw new Error(`Network response was not ok: ${response.status}`);
+                    }
+                    return response.json();
+                })
+                .then((data) => {
+                    this.log('info', 'Server response:', data);
+                    if (data.success) {
+                        this.log('info', 'Validation successful');
+                        this.setValidated(token);
+                        document.getElementById("turnstile-overlay").classList.add("hidden");
+                        if (this.widget && window.turnstile) {
+                            try {
+                                this.log('info', 'Cleaning up widget');
+                                turnstile.remove(this.widget);
+                                this.widget = null;
+                            } catch (e) {
+                                this.log('error', 'Error cleaning up widget:', e);
+                            }
+                        }
+                    } else {
+                        this.log('error', 'Validation failed:', data.error);
+                        this.clearValidation();
+                        if (this.widget && window.turnstile) {
+                            try {
+                                this.log('info', 'Resetting widget');
+                                turnstile.reset(this.widget);
+                            } catch (e) {
+                                this.log('error', 'Error resetting widget:', e);
+                                this.initTurnstile();
+                            }
+                        }
+                    }
+                })
+                .catch((error) => {
+                    this.log('error', 'Error during validation:', error);
+                    if (this.widget && window.turnstile) {
+                        try {
+                            this.log('info', 'Resetting widget due to error');
+                            turnstile.reset(this.widget);
+                        } catch (e) {
+                            this.log('error', 'Error resetting widget:', e);
+                            this.initTurnstile();
+                        }
+                    }
                 });
+            },
+
+            initTurnstile() {
+                this.log('info', 'Initializing...');
+                
+                // Check if Turnstile API is available
+                if (!window.turnstile) {
+                    this.log('error', 'Turnstile API not loaded');
+                    return;
+                }
+
+                const overlay = document.getElementById("turnstile-overlay");
+                const widgetContainer = document.getElementById("turnstile-widget");
+                
+                if (!this.isValidated()) {
+                    this.log('info', 'No session token, showing overlay');
+                    overlay.classList.remove("hidden");
+                    
+                    if (this.widget) {
+                        try {
+                            turnstile.remove(this.widget);
+                        } catch (e) {
+                            this.log('error', 'Error cleaning up old widget:', e);
+                        }
+                    }
+                    
+                    this.log('info', 'Rendering widget with sitekey:', '{{ base.site_key }}');
+                    this.widget = turnstile.render(widgetContainer, {
+                        sitekey: '{{ base.site_key }}',
+                        callback: (token) => this.onTurnstileSuccess(token),
+                        'refresh-expired': 'auto',
+                        'execution': 'render',
+                        'error-callback': () => {
+                            this.log('error', 'Widget encountered an error');
+                            this.clearValidation();
+                        },
+                        'timeout-callback': () => {
+                            this.log('error', 'Widget timed out');
+                            this.clearValidation();
+                        },
+                        'expired-callback': () => {
+                            this.log('info', 'Token expired, clearing validation');
+                            this.clearValidation();
+                            this.initTurnstile();
+                        }
+                    });
+                    this.log('info', 'Widget rendered');
+                } else {
+                    this.log('info', 'Using existing session token');
+                }
             }
+        };
+
+        // Initialize after DOM is fully loaded
+        if (document.readyState === 'loading') {
+            TurnstileManager.log('info', 'Waiting for DOMContentLoaded');
+            document.addEventListener('DOMContentLoaded', () => TurnstileManager.initTurnstile());
+        } else {
+            TurnstileManager.log('info', 'DOM already loaded, initializing immediately');
+            TurnstileManager.initTurnstile();
         }
     </script>
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+    <script 
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit" 
+        async 
+        defer
+        onload="TurnstileManager.log('info', 'API script loaded')"
+        onerror="TurnstileManager.log('error', 'API script failed to load')"
+    ></script>
 </body>
 </html>

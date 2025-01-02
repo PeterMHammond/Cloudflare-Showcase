@@ -1,7 +1,22 @@
 use askama::Template;
 use worker::*;
 use serde_json::json;
-use crate::{utils::turnstile::validate_turnstile_token, BaseTemplate};
+use serde::{Deserialize, Serialize};
+use crate::{utils::turnstile::{validate_turnstile_token}, BaseTemplate};
+
+#[derive(Deserialize)]
+struct ValidateRequest {
+    token: String,
+}
+
+#[derive(Serialize)]
+struct ApiResponse {
+    success: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    error: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    debug_info: Option<serde_json::Value>,
+}
 
 #[derive(Template)]
 #[template(path = "turnstile.html")]
@@ -23,21 +38,30 @@ pub async fn get_handler(_req: Request, ctx: RouteContext<()>) -> Result<Respons
 
 pub async fn post_handler(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
     let secret_key = ctx.env.secret("TURNSTILE_SECRET_KEY")?.to_string();
-    let form_data = req.form_data().await?;
+    let user_ip = req.headers().get("CF-Connecting-IP")?;
     
-    let token = match form_data.get("cf-turnstile-response") {
-        Some(FormEntry::Field(value)) => value,
-        _ => return Response::error("Missing Turnstile token", 400),
+    let validate_req: ValidateRequest = req.json().await.map_err(|err| {
+        console_error!("Failed to parse JSON: {}", err);
+        err
+    })?;
+    
+    let turnstile_response = validate_turnstile_token(&validate_req.token, &secret_key, user_ip.as_deref()).await?;
+    
+    let debug_info = if cfg!(debug_assertions) {
+        Some(json!({
+            "user_ip": user_ip,
+            "token_length": validate_req.token.len(),
+            "token_preview": format!("{}...", &validate_req.token[..20])
+        }))
+    } else {
+        None
     };
 
-    let user_ip = req.headers().get("CF-Connecting-IP")?;
-    let mut verify_response = validate_turnstile_token(&token, &secret_key, user_ip.as_deref()).await?;
+    let api_response = ApiResponse {
+        success: turnstile_response.success,
+        error: turnstile_response.error_codes,
+        debug_info,
+    };
 
-    if let serde_json::Value::Object(ref mut map) = verify_response {
-        map.insert("user_ip".into(), json!(user_ip));
-        map.insert("token_length".into(), json!(token.len()));
-        map.insert("token_preview".into(), json!(format!("{}...", &token[..20])));
-    }
-
-    Response::from_json(&verify_response)
+    Response::from_json(&api_response)
 } 
