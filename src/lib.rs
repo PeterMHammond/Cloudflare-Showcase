@@ -1,3 +1,4 @@
+use cookie::{Cookie, CookieJar, Key};
 use worker::*;
 use routes::{
     about::handler as about,
@@ -52,7 +53,29 @@ pub mod routes {
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     console_error_panic_hook::set_once();
+
+    let value = match req.headers().get("Cookie")? {
+        Some(header) => {
+            let header_str = header.to_string();
+            let secret_key = env.secret("TURNSTILE_SECRET_KEY")?.to_string();
+            let secret_bytes = secret_key.as_bytes();
+            let cookie_key = Key::derive_from(secret_bytes);    
+            let mut jar = CookieJar::new();
+            for cookie_str in header_str.split(';').map(|s| s.trim().to_owned()) {
+                if let Ok(cookie) = Cookie::parse(cookie_str) {
+                    jar.add_original(cookie);
+                }
+            }
+            match jar.signed(&cookie_key).get("turnstile") {
+                Some(cookie) => cookie.value().to_string(),
+                None => "Invalid Turnstile".to_string(),
+            }
+        }
+        None => "Cookie header not found".to_string(),
+    };
     
+    console_log!("Cookie value: {}", value);
+
     let router = Router::with_data(());
     
     let response = router
