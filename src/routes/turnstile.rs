@@ -2,7 +2,7 @@ use askama::Template;
 use worker::*;
 use serde_json::json;
 use serde::{Deserialize, Serialize};
-use crate::{utils::turnstile::{validate_turnstile_token}, BaseTemplate};
+use crate::{utils::turnstile::validate_turnstile_token, BaseTemplate};
 
 #[derive(Deserialize)]
 struct ValidateRequest {

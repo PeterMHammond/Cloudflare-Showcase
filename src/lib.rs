@@ -10,6 +10,7 @@ use routes::{
     study_do::handler as study_do,
     openai::handler as openai,
     turnstile,
+    verify,
 };
 
 pub struct BaseTemplate {
@@ -48,6 +49,7 @@ pub mod routes {
     pub mod study_do;
     pub mod openai;
     pub mod turnstile;
+    pub mod verify;
 }
 
 #[event(fetch)]
@@ -62,11 +64,13 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
             let cookie_key = Key::derive_from(secret_bytes);    
             let mut jar = CookieJar::new();
             for cookie_str in header_str.split(';').map(|s| s.trim().to_owned()) {
+                console_log!("Raw cookie string: {}", cookie_str);
                 if let Ok(cookie) = Cookie::parse(cookie_str) {
-                    jar.add_original(cookie);
+                    console_log!("Parsed cookie name: {}, value: {}", cookie.name(), cookie.value());
+                    jar.signed_mut(&cookie_key).add(cookie);
                 }
             }
-            match jar.signed(&cookie_key).get("turnstile") {
+            match jar.signed(&cookie_key).get("turnstile_validated") {
                 Some(cookie) => cookie.value().to_string(),
                 None => "Invalid Turnstile".to_string(),
             }
@@ -89,6 +93,8 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
         .get_async("/openai", openai)
         .get_async("/turnstile", turnstile::get_handler)
         .post_async("/turnstile", turnstile::post_handler)
+        .get_async("/verify", verify::get_handler)
+        .post_async("/verify", verify::post_handler)
         .run(req, env)
         .await?;
 

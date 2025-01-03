@@ -46,7 +46,7 @@
                 turnstile.render('#turnstile-widget', {
                     sitekey: '{{ base.site_key }}',
                     callback: (token) => {
-                        fetch('/turnstile', {
+                        fetch('/verify', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ token })

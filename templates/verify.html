@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+    <title>Verify Human - Cloudflare Showcase</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full bg-[#e8e6de] flex items-center justify-center">
+    <div id="verify-container" class="bg-white p-8 rounded-lg shadow-lg flex flex-col items-center max-w-md w-full mx-4">
+        <h1 class="text-2xl font-bold mb-6 text-gray-800">Welcome to Cloudflare Showcase</h1>
+        <p class="text-gray-600 mb-6 text-center">Please verify that you're human to continue</p>
+        <div id="turnstile-widget" class="mb-4"></div>
+    </div>
+
+    <script>
+        window.onloadTurnstileCallback = function () {
+            turnstile.render('#turnstile-widget', {
+                sitekey: '{{ site_key }}',
+                callback: (token) => {
+                    fetch('/verify', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ token })
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            document.getElementById('verify-container').classList.add('opacity-0', 'transition-opacity', 'duration-500');
+                        }
+                    });
+                },
+                'refresh-expired': 'auto'
+            });
+        };
+    </script>
+    <script 
+        src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" 
+        async 
+        defer
+    ></script>
+</body>
+</html> 
