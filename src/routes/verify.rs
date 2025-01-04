@@ -3,6 +3,7 @@ use cookie::{Cookie, CookieJar, Key};
 use serde::{Deserialize, Serialize};
 use worker::*;
 use crate::utils::turnstile::validate_turnstile_token;
+use crate::utils::middleware::ValidationState;
 
 #[derive(Template)]
 #[template(path = "verify.html")]
@@ -23,7 +24,7 @@ struct VerifyResponse {
     error: Option<Vec<String>>,
 }
 
-pub async fn get_handler(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn get_handler(_req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let site_key = ctx.env.secret("TURNSTILE_SITE_KEY")?.to_string();
     let template = VerifyTemplate { site_key };
 
@@ -33,7 +34,7 @@ pub async fn get_handler(_req: Request, ctx: RouteContext<()>) -> Result<Respons
     }
 }
 
-pub async fn post_handler(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn post_handler(mut req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let secret_key = ctx.env.secret("TURNSTILE_SECRET_KEY")?.to_string();
     let user_ip = req.headers().get("CF-Connecting-IP")?;
     

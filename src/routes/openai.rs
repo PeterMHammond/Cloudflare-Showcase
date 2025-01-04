@@ -3,6 +3,7 @@ use worker::*;
 use serde_json::{json, Value};
 use serde::{Deserialize, Serialize};
 use crate::BaseTemplate;
+use crate::utils::middleware::ValidationState;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ClientSecret {
@@ -50,7 +51,7 @@ struct OpenAITemplate {
     expiry: String,
 }
 
-pub async fn handler(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn handler(req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let api_key = ctx.env.secret("OPENAI_API_KEY")?.to_string();    
     let headers = req.headers();
     console_log!("User IP: {:?}", headers);

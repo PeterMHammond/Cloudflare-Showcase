@@ -1,6 +1,7 @@
 use askama::Template;
 use worker::*;
 use crate::BaseTemplate;
+use crate::utils::middleware::ValidationState;
 
 #[derive(Template)]
 #[template(path = "index.html")]
@@ -9,7 +10,7 @@ struct IndexTemplate {
     base: BaseTemplate,
 }
 
-pub async fn handler(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn handler(_req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let base = BaseTemplate::new(&ctx, "Home - Cloudflare Showcase", "Welcome").await?;
     
     let template = IndexTemplate { base };

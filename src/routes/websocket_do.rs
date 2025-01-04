@@ -3,6 +3,7 @@ use worker::console_log;
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
+use crate::utils::middleware::ValidationState;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(untagged)]
@@ -165,7 +166,7 @@ impl DurableObject for WebsocketDO {
     }
 }
 
-pub async fn handler(req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn handler(req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let namespace = ctx.env.durable_object("WebsocketDO")?;
     let stub = namespace.id_from_name("WebsocketDO")?.get_stub()?;
     stub.fetch_with_request(req).await

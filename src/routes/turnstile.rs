@@ -3,6 +3,7 @@ use worker::*;
 use serde_json::json;
 use serde::{Deserialize, Serialize};
 use crate::{utils::turnstile::validate_turnstile_token, BaseTemplate};
+use crate::utils::middleware::ValidationState;
 
 #[derive(Deserialize)]
 struct ValidateRequest {
@@ -25,7 +26,7 @@ struct TurnstileTemplate {
     base: BaseTemplate,
 }
 
-pub async fn get_handler(_req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn get_handler(_req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let base = BaseTemplate::new(&ctx, "Turnstile Test - Cloudflare Showcase", "Turnstile Validation").await?;
     
     let template = TurnstileTemplate { base };
@@ -36,7 +37,7 @@ pub async fn get_handler(_req: Request, ctx: RouteContext<()>) -> Result<Respons
     }
 }
 
-pub async fn post_handler(mut req: Request, ctx: RouteContext<()>) -> Result<Response> {
+pub async fn post_handler(mut req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let secret_key = ctx.env.secret("TURNSTILE_SECRET_KEY")?.to_string();
     let user_ip = req.headers().get("CF-Connecting-IP")?;
     

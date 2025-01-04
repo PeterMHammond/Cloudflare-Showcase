@@ -1,5 +1,5 @@
-use cookie::{Cookie, CookieJar, Key};
 use worker::*;
+use utils::middleware::ValidationState;
 use routes::{
     about::handler as about,
     index::handler as index,
@@ -19,10 +19,12 @@ pub struct BaseTemplate {
     pub site_key: String,
     pub current_year: String,
     pub version: String,
+    pub is_validated: bool,
+    pub validation_message: String,
 }
 
 impl BaseTemplate {
-    pub async fn new(ctx: &RouteContext<()>, title: &str, page_title: &str) -> Result<Self> {
+    pub async fn new(ctx: &RouteContext<ValidationState>, title: &str, page_title: &str) -> Result<Self> {
         let site_key = ctx.env.secret("TURNSTILE_SITE_KEY")?.to_string();
         
         Ok(Self {
@@ -31,6 +33,8 @@ impl BaseTemplate {
             current_year: "2024".to_string(),
             version: option_env!("CARGO_PKG_VERSION").unwrap_or_default().to_string(),
             site_key,
+            is_validated: ctx.data.is_validated,
+            validation_message: ctx.data.validation_message.to_string(),
         })
     }
 }
@@ -38,6 +42,7 @@ impl BaseTemplate {
 pub mod utils {
     pub mod scripture;
     pub mod turnstile;
+    pub mod middleware;
 }
 pub mod routes {
     pub mod about;
@@ -53,34 +58,13 @@ pub mod routes {
 }
 
 #[event(fetch)]
-async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
+async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
     console_error_panic_hook::set_once();
 
-    let value = match req.headers().get("Cookie")? {
-        Some(header) => {
-            let header_str = header.to_string();
-            let secret_key = env.secret("TURNSTILE_SECRET_KEY")?.to_string();
-            let secret_bytes = secret_key.as_bytes();
-            let cookie_key = Key::derive_from(secret_bytes);    
-            let mut jar = CookieJar::new();
-            for cookie_str in header_str.split(';').map(|s| s.trim().to_owned()) {
-                console_log!("Raw cookie string: {}", cookie_str);
-                if let Ok(cookie) = Cookie::parse(cookie_str) {
-                    console_log!("Parsed cookie name: {}, value: {}", cookie.name(), cookie.value());
-                    jar.signed_mut(&cookie_key).add(cookie);
-                }
-            }
-            match jar.signed(&cookie_key).get("turnstile_validated") {
-                Some(cookie) => cookie.value().to_string(),
-                None => "Invalid Turnstile".to_string(),
-            }
-        }
-        None => "Cookie header not found".to_string(),
-    };
-    
-    console_log!("Cookie value: {}", value);
+    let (req, validation_state) = utils::middleware::validate_turnstile(req, &env, &ctx).await?;
+    console_log!("Validation state: {}", validation_state.validation_message);
 
-    let router = Router::with_data(());
+    let router = Router::with_data(validation_state);
     
     let response = router
         .get_async("/", index)
