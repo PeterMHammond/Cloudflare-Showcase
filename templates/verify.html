@@ -6,39 +6,59 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <title>Verify Human - Cloudflare Showcase</title>
     <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="h-full bg-[#e8e6de] flex items-center justify-center">
-    <div id="verify-container" class="bg-white p-8 rounded-lg shadow-lg flex flex-col items-center max-w-md w-full mx-4">
-        <h1 class="text-2xl font-bold mb-6 text-gray-800">Welcome to Cloudflare Showcase</h1>
-        <p class="text-gray-600 mb-6 text-center">Please verify that you're human to continue</p>
-        <div id="turnstile-widget" class="mb-4"></div>
-    </div>
-
     <script>
+        tailwind.config = {
+            theme: {},
+            darkMode: 'media',
+        };
+    </script>
+</head>
+<body class="h-full bg-white dark:bg-gray-900">
+    
+    <dialog id="verify-container" class="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-gray-800 rounded-xl shadow-xl flex flex-col items-center w-[332px] h-[120px] opacity-0 scale-95 transition-all duration-500 ease-out">
+        <h2 class="mt-2 text-sm font-medium text-gray-800 dark:text-white text-center">Cloudflare Showcase</h2>
+        <div id="turnstile-widget" class="mt-4"></div>
+    </dialog>
+    
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            const modal = document.getElementById("verify-container");
+            setTimeout(() => {
+                modal.classList.remove("opacity-0", "scale-95");
+                modal.classList.add("opacity-100", "scale-100");
+            }, 50);
+        });
+
         window.onloadTurnstileCallback = function () {
             turnstile.render('#turnstile-widget', {
-                sitekey: '{{ site_key }}',
+                sitekey: '{{ site_key }}', // Replace this with your actual site key
+                'data-theme': 'auto',
+                'data-size': 'normal',
                 callback: (token) => {
                     fetch('/verify', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token })
+                        body: JSON.stringify({ token }),
                     })
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            document.getElementById('verify-container').classList.add('opacity-0', 'transition-opacity', 'duration-500');
+                            const container = document.getElementById('verify-container');
+
+                            setTimeout(() => {
+                                container.classList.remove("opacity-100", "scale-100");
+                                container.classList.add("opacity-0", "scale-95");
+                                setTimeout(() => {
+                                    container.remove();
+                                }, 2000);
+                            }, 1400);
                         }
                     });
                 },
-                'refresh-expired': 'auto'
+                'refresh-expired': 'auto',
             });
         };
     </script>
-    <script 
-        src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" 
-        async 
-        defer
-    ></script>
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onloadTurnstileCallback" async defer></script>
 </body>
-</html> 
+</html>
