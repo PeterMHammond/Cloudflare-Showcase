@@ -1,20 +1,42 @@
-# Cloudflare Primitives Showcase
-This is a working showcase of what can be built with the Cloudflare Primitives.
+# Cloudflare Showcase
 
-## CI/CD
-### Git integration
-[Git integration](https://developers.cloudflare.com/pages/configuration/git-integration/)
-![Connect Git Repo](./.assets/connect-git-repo.png)
+A showcase of Cloudflare Workers capabilities using Rust, demonstrating routing and API functionality.
 
-### Build & deploy commands
+## Setup
 
-Build command: 
-```
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal && export PATH="$HOME/.cargo/bin:$PATH" && rustc --version && rustup update stable && rustup target add wasm32-unknown-unknown && cargo install -q worker-build && worker-build --release
+1. Install [wrangler](https://developers.cloudflare.com/workers/wrangler/install-and-update/):
+```bash
+npm install -g wrangler
 ```
 
-Deploy command: 
+2. Login to Cloudflare:
+```bash
+wrangler login
 ```
-export PATH="$HOME/.cargo/bin:$PATH" && npx wrangler deploy
+
+3. Set up Turnstile secrets:
+```bash
+# Set your Turnstile site key (from Cloudflare Turnstile configuration)
+wrangler secret put TURNSTILE_SITE_KEY
+
+# Set your Turnstile secret key (from Cloudflare Turnstile configuration)
+wrangler secret put TURNSTILE_SECRET_KEY
+
+# Set your cookie key (for session management)
+wrangler secret put COOKIE_KEY
+```
+
+## Development
+
+Run the development server:
+```bash
+wrangler dev --live-reload
+```
+
+## Deployment
+
+Deploy to Cloudflare Workers:
+```bash
+wrangler deploy
 ```
 

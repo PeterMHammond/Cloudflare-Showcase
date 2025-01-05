@@ -1,4 +1,27 @@
-<footer class="col-span-1 md:col-span-2 bg-white p-4 rounded-lg flex flex-col md:flex-row justify-between items-center space-y-2 md:space-y-0">
-    <p>&copy; {{ current_year }} Cloudflare Showcase</p>
-    <p>Built with Rust for Cloudflare Workers (Showcase v{{ version }})</p>
+<footer class="col-span-1 md:col-span-2 bg-white p-4 rounded-lg">
+    <div class="flex flex-col lg:flex-row items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center justify-center lg:justify-start gap-2 text-gray-500 w-full lg:w-auto">
+            <span>Built with ⚡ by</span>
+            <a href="https://github.com/petermhammond" target="_blank" rel="noopener noreferrer" class="inline-flex flex-wrap items-center gap-3 text-gray-600 hover:text-gray-900">
+                <span class="hover:border-b hover:border-gray-900 transition-all duration-300">Peter M. Hammond</span>
+                <div class="flex flex-wrap gap-2">
+                    <img src="https://img.shields.io/badge/dynamic/json?logo=github&amp;label=Repos&amp;style=social&amp;query=$.public_repos&amp;url=https://api.github.com/users/petermhammond" alt="Peter M. Hammond's Repositories" height="20" style="min-width: 85px;">
+                    <img src="https://img.shields.io/badge/★_stars-13-lightgrey?logo=github&amp;style=social" alt="Peter M. Hammond's Stars" height="20" style="min-width: 85px;">
+                </div>
+            </a>
+            <span class="text-gray-400 hidden lg:inline">•</span>
+            <a href="https://github.com/EveryGoodWork" target="_blank" rel="noopener noreferrer" class="inline-flex flex-wrap items-center gap-3 text-gray-600 hover:text-gray-900">
+                <span class="hover:border-b hover:border-gray-900 transition-all duration-300">EveryGoodWork Inc.</span>
+                <div class="flex flex-wrap gap-2">
+                    <img src="https://img.shields.io/badge/Repos-19-lightgrey?logo=github&amp;style=social" alt="EveryGoodWork's Repositories" height="20" style="min-width: 85px;">
+                    <img src="https://img.shields.io/badge/★_stars-31-lightgrey?logo=github&amp;style=social" alt="EveryGoodWork GitHub Stars" height="20" style="min-width: 85px;">
+                </div>
+            </a>
+        </div>
+        <div class="flex flex-wrap items-center justify-center lg:justify-end gap-4 text-gray-600 w-full lg:w-auto">
+            <p>© 2024 Cloudflare Showcase</p>
+            <span class="text-gray-400 hidden lg:inline">•</span>
+            <p>Built with Rust for Cloudflare Workers (Showcase v{{ base.version }})</p>
+        </div>
+    </div>
 </footer>
