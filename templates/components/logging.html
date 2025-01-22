@@ -1,0 +1,62 @@
+<script>
+window.AppLogger = {
+    ICONS: {
+        INFO: 'ℹ️',
+        SUCCESS: '✅',
+        WARNING: '⚠️',
+        ERROR: '❌',
+        DEBUG: '🔍'
+    },
+
+    logMessage: function(msg, level = 'INFO') {
+        const logDiv = document.getElementById('message-log');
+        if (!logDiv) return;
+
+        const MAX_MESSAGES = 100;
+        
+        while (logDiv.children.length >= MAX_MESSAGES) {
+            logDiv.removeChild(logDiv.firstChild);
+        }
+
+        const logEntry = document.createElement('div');
+        const timestamp = new Date().toLocaleTimeString();
+        
+        let msgContent = msg;
+        if (typeof msg === 'object') {
+            try {
+                msgContent = JSON.stringify(msg, null, 2);
+            } catch (e) {
+                msgContent = msg.toString();
+            }
+        }
+
+        logEntry.className = `whitespace-pre-wrap break-words ${
+            level === 'ERROR' ? 'text-red-400' :
+            level === 'WARNING' ? 'text-yellow-400' :
+            level === 'SUCCESS' ? 'text-green-400' :
+            level === 'DEBUG' ? 'text-purple-400' :
+            'text-blue-400'
+        }`;
+        
+        const formattedMsg = String(msgContent).trim()
+            .replace(/\s{2,}/g, ' ')
+            .replace(/\n+/g, '\n')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;');
+
+        logEntry.innerHTML = `[${timestamp}] ${this.ICONS[level]} ${formattedMsg}`;
+        
+        logDiv.appendChild(logEntry);
+        logDiv.scrollTop = logDiv.scrollHeight;
+    }
+};
+</script>
+
+<!-- Log Display Container -->
+<article class="flex-1 bg-white rounded-lg shadow-sm mt-4">
+    <header class="text-lg font-semibold text-gray-800 mb-4">Debug Log</header>
+    <section id="message-log"
+             class="flex-1 min-h-0 max-h-[300px] font-mono text-sm bg-black text-green-500 rounded-lg p-4 overflow-y-auto">
+    </section>
+</article> 

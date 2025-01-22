@@ -9,6 +9,8 @@ use routes::{
     study::handler as study,
     study_do::handler as study_do,
     openai::handler as openai,
+    stt::handler as stt,
+    stt::do_handler::handler as stt_do,
     turnstile,
     verify,
 };
@@ -53,6 +55,7 @@ pub mod routes {
     pub mod study;
     pub mod study_do;
     pub mod openai;
+    pub mod stt;
     pub mod turnstile;
     pub mod verify;
 }
@@ -75,6 +78,8 @@ async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .get_async("/study", study)
         .get_async("/study_do", study_do)
         .get_async("/openai", openai)
+        .get_async("/stt", stt)
+        .get_async("/stt/ws", stt_do)
         .get_async("/turnstile", turnstile::get_handler)
         .post_async("/turnstile", turnstile::post_handler)
         .get_async("/verify", verify::get_handler)
