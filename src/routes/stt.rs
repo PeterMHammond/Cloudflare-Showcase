@@ -194,104 +194,79 @@ impl SttDO {
     }
 
     // Confidence thresholds for transcription quality
-    // Base thresholds for regular speech
-    const MIN_AVG_LOGPROB: f64 = -0.75;          // Base threshold for word predictions
-    const MAX_NO_SPEECH_PROB: f64 = 0.1;         // Lower means more confident this is speech
-    const MAX_COMPRESSION_RATIO: f64 = 2.0;       // Increased to allow for repetitive patterns
-    const MAX_TEMPERATURE: f64 = 0.0;             // 0.0 means model was deterministic
-    const MIN_DURATION: f64 = 0.15;              // Minimum duration for a word (in seconds)
-    const MAX_DURATION: f64 = 0.75;              // Maximum duration for a word (in seconds)
-    const MIN_CONFIDENCE_SCORE: f64 = 0.65;      // Slightly lowered composite confidence score
-    
-    // More lenient thresholds for numeric sequences
-    const MIN_CONFIDENCE_SCORE_NUMBERS: f64 = 0.6; // More lenient composite score for numbers
+    const MIN_AVG_LOGPROB: f64 = -0.7;          // Strict cutoff for word prediction confidence
+    const MAX_NO_SPEECH_PROB: f64 = 0.1;        // Must be confident this is speech
+    const MAX_COMPRESSION_RATIO: f64 = 2.0;      // Reasonable compression ratio limit
+    const MAX_TEMPERATURE: f64 = 0.2;           // Low temperature for deterministic results
+    const MIN_WORD_DURATION: f64 = 0.05;        // Minimum word duration
+    const MIN_CONFIDENCE_SCORE: f64 = 0.5;      // Slightly lower threshold for overall confidence
 
     fn calculate_confidence_score(segment: &Segment) -> f64 {
-        let mut score = 0.0;
-        let mut weights = 0.0;
+        // 1. First check critical thresholds that should fail immediately
+        if let Some(prob) = segment.avg_logprob {
+            if prob < Self::MIN_AVG_LOGPROB {
+                console_log!("Failed confidence check: avg_logprob {} below threshold {}", 
+                    prob, Self::MIN_AVG_LOGPROB);
+                return 0.0;
+            }
+        }
 
-        // 1. Log probability score (weight: 0.35)
-        let prob_score = if let Some(prob) = segment.avg_logprob {
-            let score = (prob + 1.0).max(0.0);  // Normalize to 0.0-1.0
-            console_log!("  1. Log probability: {} → score: {:.3} (weight: 0.35)", prob, score);
-            score * 0.35
-        } else {
-            console_log!("  1. Log probability: missing");
-            0.0
-        };
-        score += prob_score;
-        weights += 0.35;
+        if let Some(temp) = segment.temperature {
+            if temp > Self::MAX_TEMPERATURE {
+                console_log!("Failed confidence check: temperature {} above threshold {}", 
+                    temp, Self::MAX_TEMPERATURE);
+                return 0.0;
+            }
+        }
 
-        // 2. Speech probability score (weight: 0.25)
-        let speech_score = if let Some(prob) = segment.no_speech_prob {
-            let score = 1.0 - prob;
-            console_log!("  2. Speech probability: {} → score: {:.3} (weight: 0.25)", prob, score);
-            score * 0.25
-        } else {
-            console_log!("  2. Speech probability: missing");
-            0.0
-        };
-        score += speech_score;
-        weights += 0.25;
+        if let Some(prob) = segment.no_speech_prob {
+            if prob > Self::MAX_NO_SPEECH_PROB {
+                console_log!("Failed confidence check: no_speech_prob {} above threshold {}", 
+                    prob, Self::MAX_NO_SPEECH_PROB);
+                return 0.0;
+            }
+        }
 
-        // 3. Compression ratio score (weight: 0.15)
-        let compression_score = if let Some(ratio) = segment.compression_ratio {
-            let score = (1.0 - (ratio - 0.5).max(0.0).min(0.5) * 2.0).max(0.0);
-            console_log!("  3. Compression ratio: {} → score: {:.3} (weight: 0.15)", ratio, score);
-            score * 0.15
-        } else {
-            console_log!("  3. Compression ratio: missing");
-            0.0
-        };
-        score += compression_score;
-        weights += 0.15;
-
-        // 4. Temperature score (weight: 0.15)
-        let temp_score = if let Some(temp) = segment.temperature {
-            let score = (1.0 - temp).max(0.0);
-            console_log!("  4. Temperature: {} → score: {:.3} (weight: 0.15)", temp, score);
-            score * 0.15
-        } else {
-            console_log!("  4. Temperature: missing");
-            0.0
-        };
-        score += temp_score;
-        weights += 0.15;
-
-        // 5. Word timing score (weight: 0.10)
-        let timing_score = if let Some(words) = &segment.words {
-            let mut word_scores = Vec::new();
-            let mut total_score = 1.0;
+        // 2. Check word timings - must all be valid
+        if let Some(words) = &segment.words {
             for word in words {
                 let duration = word.end - word.start;
-                let word_score = if duration < Self::MIN_DURATION {
-                    duration / Self::MIN_DURATION
-                } else if duration > Self::MAX_DURATION {
-                    Self::MAX_DURATION / duration
-                } else {
-                    1.0
-                };
-                total_score *= word_score;
-                word_scores.push((word.word.as_str(), duration, word_score));
+                if word.start == 0.0 && word.end == 0.0 {
+                    console_log!("Failed confidence check: word '{}' has invalid timing", word.word);
+                    return 0.0;
+                }
+                if duration < Self::MIN_WORD_DURATION {
+                    console_log!("Failed confidence check: word '{}' duration {}s below threshold {}s", 
+                        word.word, duration, Self::MIN_WORD_DURATION);
+                    return 0.0;
+                }
             }
-            console_log!("  5. Word timing scores:");
-            for (word, duration, score) in word_scores {
-                console_log!("     - '{}': {:.3}s → score: {:.3}", word, duration, score);
-            }
-            console_log!("     Final timing score: {:.3} (weight: 0.10)", total_score);
-            total_score * 0.10
-        } else {
-            console_log!("  5. Word timing: missing");
-            0.0
-        };
-        score += timing_score;
-        weights += 0.10;
+        }
 
-        // Calculate final normalized score
-        let final_score = if weights > 0.0 { score / weights } else { 0.0 };
-        console_log!("Final confidence score: {:.3} (normalized by {:.2} weights)", final_score, weights);
-        
-        final_score
+        // 3. Calculate final score only if all critical checks pass
+        let mut score = 1.0;
+
+        // Scale log probability between MIN_AVG_LOGPROB and 0.0
+        if let Some(prob) = segment.avg_logprob {
+            // Normalize logprob to 0.5-1.0 range for good values
+            let norm_score = (prob - Self::MIN_AVG_LOGPROB) / (0.0 - Self::MIN_AVG_LOGPROB);
+            score *= 0.5 + (norm_score * 0.5);
+        }
+
+        // Small penalty for high compression ratio
+        if let Some(ratio) = segment.compression_ratio {
+            if ratio > Self::MAX_COMPRESSION_RATIO {
+                score *= 0.8;
+            }
+        }
+
+        // Small penalty for non-zero temperature
+        if let Some(temp) = segment.temperature {
+            score *= 1.0 - (temp / Self::MAX_TEMPERATURE) * 0.2;
+        }
+
+        console_log!("Final confidence score: {:.3}", score);
+        score
     }
 
     fn is_high_confidence(segment: &Segment) -> bool {
@@ -305,7 +280,7 @@ impl SttDO {
         
         // Use appropriate threshold based on content type
         let min_score = if is_number_sequence {
-            Self::MIN_CONFIDENCE_SCORE_NUMBERS
+            Self::MIN_CONFIDENCE_SCORE
         } else {
             Self::MIN_CONFIDENCE_SCORE
         };
