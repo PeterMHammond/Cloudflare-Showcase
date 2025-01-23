@@ -8,6 +8,28 @@ window.AppLogger = {
         DEBUG: '🔍'
     },
 
+    truncateValue: function(value, maxLength = 100) {
+        if (typeof value === 'string' && value.length > maxLength) {
+            return value.substring(0, maxLength) + '... [truncated]';
+        }
+        return value;
+    },
+
+    truncateJson: function(obj) {
+        if (typeof obj !== 'object' || obj === null) return obj;
+        
+        const truncated = Array.isArray(obj) ? [] : {};
+        for (const [key, value] of Object.entries(obj)) {
+            if (key === 'audio_data') continue; // Skip audio_data field
+            if (typeof value === 'object' && value !== null) {
+                truncated[key] = this.truncateJson(value);
+            } else {
+                truncated[key] = this.truncateValue(value);
+            }
+        }
+        return truncated;
+    },
+
     logMessage: function(msg, level = 'INFO') {
         const logDiv = document.getElementById('message-log');
         if (!logDiv) return;
@@ -24,7 +46,8 @@ window.AppLogger = {
         let msgContent = msg;
         if (typeof msg === 'object') {
             try {
-                msgContent = JSON.stringify(msg, null, 2);
+                const truncatedMsg = this.truncateJson(msg);
+                msgContent = JSON.stringify(truncatedMsg, null, 2);
             } catch (e) {
                 msgContent = msg.toString();
             }

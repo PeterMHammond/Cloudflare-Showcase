@@ -41,14 +41,20 @@ htmx.defineExtension('ws-debug', {
         };
 
         let msgType = '';
+        let displayMsg = msg;
         try {
-            JSON.parse(msg);
-            msgType = '{json} ';
+            const jsonMsg = JSON.parse(msg);
+            if (jsonMsg && typeof jsonMsg === 'object') {
+                // Remove audio_data before logging
+                const { audio_data, ...cleanMsg } = jsonMsg;
+                displayMsg = JSON.stringify(cleanMsg);
+                msgType = '{json} ';
+            }
         } catch (e) {
             msgType = '[text] ';
         }
 
-        AppLogger.logMessage(`${ARROWS[direction]} ${msgType}${msg}`, direction === 'ERROR' ? 'ERROR' : 'INFO');
+        AppLogger.logMessage(`${ARROWS[direction]} ${msgType}${displayMsg}`, direction === 'ERROR' ? 'ERROR' : 'INFO');
     }
 });
 
@@ -149,17 +155,26 @@ class AudioProcessor extends AudioWorkletProcessor {
     constructor() {
         super();
         this.buffer = new Float32Array();
-        this.overlapBuffer = new Float32Array(); // Store previous chunk end for overlap
-        this.overlapSize = 8000; // 0.5 seconds overlap at 16kHz
-        this.silenceThreshold = 0.003;
+        this.silenceThreshold = 0.001;        // Lowered threshold for silence detection
         this.silenceCounter = 0;
-        this.minSilenceDuration = 25;
-        this.minChunkDuration = 16000; // 1 second at 16kHz
-        this.maxChunkDuration = 160000; // 10 seconds at 16kHz
-        this.lastSendTime = 0;
+        this.minSilenceDuration = 40;         // Frames of silence needed for a break (40/128 ≈ 0.3s)
+        this.maxSilenceDuration = 256;        // 2s max silence
+        this.minChunkDuration = 16000;        // 1 second minimum (lowered from 2s)
+        this.maxChunkDuration = 160000;       // 10 seconds maximum
         this.hasDetectedSpeech = false;
         this.consecutiveSpeechFrames = 0;
-        this.minSpeechFrames = 2;
+        this.minSpeechFrames = 2;             // Lowered from 3
+        this.preSpeechBuffer = new Float32Array(4000);
+        this.preSpeechWritePos = 0;
+
+        // Handle messages from the main thread
+        this.port.onmessage = (event) => {
+            if (event.data.type === 'flush' && this.buffer.length > 0) {
+                // When flushing, send whatever we have regardless of length
+                this.sendBuffer(this.buffer, false, true);
+                this.buffer = new Float32Array();
+            }
+        };
     }
 
     process(inputs, outputs, parameters) {
@@ -168,94 +183,51 @@ class AudioProcessor extends AudioWorkletProcessor {
 
         const inputChannel = input[0];
         
+        // Always append incoming audio to buffer
+        const newBuffer = new Float32Array(this.buffer.length + inputChannel.length);
+        newBuffer.set(this.buffer);
+        newBuffer.set(inputChannel, this.buffer.length);
+        this.buffer = newBuffer;
+
         // Calculate RMS for silence detection
         const rms = Math.sqrt(inputChannel.reduce((acc, val) => acc + val * val, 0) / inputChannel.length);
-        const isCurrentlySilent = rms < this.silenceThreshold;
-
-        // Track speech detection
-        if (!isCurrentlySilent) {
+        
+        if (rms > this.silenceThreshold) {
             this.consecutiveSpeechFrames++;
-            if (this.consecutiveSpeechFrames >= this.minSpeechFrames) {
-                this.hasDetectedSpeech = true;
-            }
+            this.silenceCounter = 0;
+            this.hasDetectedSpeech = true;
         } else {
             this.consecutiveSpeechFrames = 0;
-        }
-
-        // Update silence counter
-        if (isCurrentlySilent) {
             this.silenceCounter++;
-        } else {
-            this.silenceCounter = 0;
         }
 
-        // Only append audio if we've detected speech or are in an active speech segment
-        if (this.hasDetectedSpeech || !isCurrentlySilent) {
-            // Append new audio data to buffer
-            const newBuffer = new Float32Array(this.buffer.length + inputChannel.length);
-            newBuffer.set(this.buffer);
-            newBuffer.set(inputChannel, this.buffer.length);
-            this.buffer = newBuffer;
-        }
-
-        // Determine if we should send the buffer
-        let shouldSend = false;
-
-        // Only consider sending if we have detected speech
-        if (this.hasDetectedSpeech && this.buffer.length >= this.minChunkDuration) {
-            // 1. Natural pause detected
-            if (this.silenceCounter >= this.minSilenceDuration) {
-                shouldSend = true;
-            }
-            // 2. Maximum duration reached
-            else if (this.buffer.length >= this.maxChunkDuration) {
-                shouldSend = true;
-            }
-            // 3. Time threshold exceeded
-            else if ((currentFrame - this.lastSendTime) > 48000) { // ~3 seconds at 16kHz
-                shouldSend = true;
-            }
-        }
-
-        if (shouldSend && this.buffer.length > 0) {
-            // Calculate average RMS of the entire buffer to ensure it's not just silence
-            const bufferRms = Math.sqrt(
-                this.buffer.reduce((acc, val) => acc + val * val, 0) / this.buffer.length
-            );
-
-            // Only send if the buffer contains significant audio
-            if (bufferRms > this.silenceThreshold * 0.5) {
-                // Create buffer with overlap from previous chunk
-                const fullBuffer = new Float32Array(this.overlapBuffer.length + this.buffer.length);
-                fullBuffer.set(this.overlapBuffer);
-                fullBuffer.set(this.buffer, this.overlapBuffer.length);
-
-                // Convert to 16-bit PCM
-                const pcmData = new Int16Array(fullBuffer.length);
-                for (let i = 0; i < fullBuffer.length; i++) {
-                    pcmData[i] = Math.min(32767, Math.max(-32768, Math.round(fullBuffer[i] * 32767)));
-                }
-
-                // Store overlap for next chunk
-                const overlapStart = Math.max(0, this.buffer.length - this.overlapSize);
-                this.overlapBuffer = this.buffer.slice(overlapStart);
-
-                // Send the buffer
-                this.port.postMessage({
-                    type: 'audio',
-                    buffer: pcmData.buffer
-                }, [pcmData.buffer]);
-            }
-
-            // Reset state
+        // Send buffer if it's long enough or if we've detected speech and hit silence
+        if (this.buffer.length >= this.maxChunkDuration || 
+            (this.hasDetectedSpeech && this.buffer.length >= this.minChunkDuration && this.silenceCounter >= this.minSilenceDuration)) {
+            
+            this.sendBuffer(this.buffer, this.buffer.length >= this.maxChunkDuration, false);
             this.buffer = new Float32Array();
-            this.lastSendTime = currentFrame;
-            this.silenceCounter = 0;
             this.hasDetectedSpeech = false;
-            this.consecutiveSpeechFrames = 0;
         }
 
         return true;
+    }
+
+    sendBuffer(buffer, isStreaming, isFlush = false) {
+        // Only enforce minimum samples if not flushing
+        if (!isFlush && buffer.length < 128) return;
+
+        // Convert to 16-bit PCM
+        const pcmData = new Int16Array(buffer.length);
+        for (let i = 0; i < buffer.length; i++) {
+            pcmData[i] = Math.min(32767, Math.max(-32768, Math.round(buffer[i] * 32767)));
+        }
+
+        this.port.postMessage({
+            type: 'audio',
+            buffer: pcmData.buffer,
+            isStreaming: isStreaming
+        }, [pcmData.buffer]);
     }
 }
 
@@ -306,25 +278,22 @@ const AudioRecorder = {
             try {
                 if (typeof e.detail.message === 'string') {
                     const data = JSON.parse(e.detail.message);
-                    if (data.text) {
-                        // Log only essential fields, explicitly excluding audio_data
-                        AppLogger.logMessage(`{json} ${JSON.stringify({
-                            text: data.text,
-                            is_final: data.is_final,
-                            word_count: data.word_count,
-                            words: data.words?.map(w => ({ word: w.word, start: w.start, end: w.end })),
-                            vtt: data.vtt
-                        })}`, 'INFO');
+                    
+                    // Skip the welcome message as it's handled by the server
+                    if (data.text === "Connected! Click Start Recording to begin...") {
+                        return;
+                    }
 
-                        const container = document.getElementById('transcription-container');
-                        
+                    // Update transcription display
+                    const container = document.getElementById('transcription-container');
+                    if (container) {
                         // Create a new transcription entry
                         const entry = document.createElement('div');
                         entry.className = 'flex items-center space-x-2 p-2 border rounded';
                         
                         // Add play button if we have audio data
                         if (data.audio_data) {
-                            const audioBlob = this.base64ToBlob(data.audio_data, 'audio/wav');
+                            const audioBlob = base64ToBlob(data.audio_data, 'audio/wav');
                             const audioUrl = URL.createObjectURL(audioBlob);
                             
                             // Play button
@@ -359,7 +328,7 @@ const AudioRecorder = {
                             buttonContainer.appendChild(downloadButton);
                             entry.appendChild(buttonContainer);
                         }
-                        
+
                         // Add text
                         const text = document.createElement('span');
                         text.className = 'flex-grow';
@@ -369,16 +338,61 @@ const AudioRecorder = {
                         // Add to container
                         container.appendChild(entry);
                         container.scrollTop = container.scrollHeight;
-                        
-                        if (data.word_count) {
-                            document.getElementById('word-count').textContent = `Words: ${data.word_count}`;
+                    }
+
+                    // Update word timing display
+                    const wordTimingArea = document.getElementById('word-timing');
+                    if (wordTimingArea && data.words) {
+                        const wordTiming = data.words.map(w => 
+                            `${w.word.trim()}: ${w.start.toFixed(2)}s - ${w.end.toFixed(2)}s`
+                        ).join('\n');
+                        wordTimingArea.value = wordTiming;
+                        wordTimingArea.scrollTop = wordTimingArea.scrollHeight;
+                    }
+
+                    // Update VTT display
+                    const vttArea = document.getElementById('vtt-content');
+                    if (vttArea && data.vtt) {
+                        vttArea.value = data.vtt;
+                        vttArea.scrollTop = vttArea.scrollHeight;
+                    }
+
+                    // Update word count
+                    if (data.word_count) {
+                        const wordCountElement = document.getElementById('word-count');
+                        if (wordCountElement) {
+                            wordCountElement.textContent = `Words: ${data.word_count}`;
                         }
+                    }
+
+                    // Log metrics if available
+                    if (data.avg_logprob !== null) {
+                        AppLogger.logMessage(`Confidence Metrics:
+                            avg_logprob: ${data.avg_logprob?.toFixed(4)}
+                            no_speech_prob: ${data.no_speech_prob?.toFixed(4)}
+                            temperature: ${data.temperature?.toFixed(4)}
+                            compression_ratio: ${data.compression_ratio?.toFixed(4)}`, 'INFO');
                     }
                 }
             } catch (error) {
-                console.error('Error processing WebSocket message:', error);
+                AppLogger.logMessage(`Error processing message: ${error}`, 'ERROR');
             }
         });
+    },
+
+    async sendAudioChunk(audioData, isStreaming = false) {
+        if (this.webSocket && this.webSocket.readyState === WebSocket.OPEN) {
+            try {
+                // Send the audio data
+                this.webSocket.send(audioData);
+                const duration = (audioData.byteLength / 2) / 16000; // 16-bit samples at 16kHz
+                AppLogger.logMessage(`🔍 Sent audio chunk (${duration.toFixed(2)}s)`, 'INFO');
+            } catch (error) {
+                AppLogger.logMessage(`Failed to send audio chunk: ${error}`, 'ERROR');
+            }
+        } else {
+            AppLogger.logMessage('WebSocket not ready, cannot send audio', 'ERROR');
+        }
     },
 
     async startRecording() {
@@ -392,60 +406,80 @@ const AudioRecorder = {
             this.stream = await navigator.mediaDevices.getUserMedia({
                 audio: {
                     channelCount: 1,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
                     sampleRate: 16000
                 }
             });
             AppLogger.logMessage('Microphone access granted', 'SUCCESS');
 
-            this.audioContext = new AudioContext({ sampleRate: 16000 });
-            
+            // Create AudioContext and initialize AudioWorklet
+            this.audioContext = new AudioContext({
+                sampleRate: 16000,
+                channelCount: 1,
+                latencyHint: 'interactive'
+            });
+
             // Create a Blob URL for the AudioWorklet code
             const blob = new Blob([audioWorkletCode], { type: 'application/javascript' });
             const workletUrl = URL.createObjectURL(blob);
-            
-            // Load and initialize the audio worklet
+
+            // Load and add the AudioWorklet module
             await this.audioContext.audioWorklet.addModule(workletUrl);
-            URL.revokeObjectURL(workletUrl); // Clean up the URL
-            
+            URL.revokeObjectURL(workletUrl);
+
+            // Create the audio processing chain
             this.mediaStreamSource = this.audioContext.createMediaStreamSource(this.stream);
             this.audioWorklet = new AudioWorkletNode(this.audioContext, 'audio-processor');
-            
+
             // Handle audio data from the worklet
-            this.audioWorklet.port.onmessage = (event) => {
-                if (event.data.type === 'audio' && this.webSocket?.readyState === WebSocket.OPEN) {
-                    const durationSeconds = event.data.buffer.byteLength / (16000 * 2); // 16kHz, 16-bit audio
-                    this.webSocket.send(event.data.buffer);
-                    AppLogger.logMessage(`Sent audio chunk (${durationSeconds.toFixed(2)}s)`, 'DEBUG');
+            this.audioWorklet.port.onmessage = async (event) => {
+                if (event.data.type === 'audio') {
+                    await this.sendAudioChunk(event.data.buffer, event.data.isStreaming);
                 }
             };
-            
-            // Connect nodes
+
+            // Connect the audio nodes
             this.mediaStreamSource.connect(this.audioWorklet);
             this.audioWorklet.connect(this.audioContext.destination);
-            
-            this.isRecording = true;
 
             // Send start signal
             this.webSocket.send(JSON.stringify({
-                chunk_type: 'start',
+                chunk_type: "start",
                 timestamp: Date.now()
             }));
+
+            this.isRecording = true;
             AppLogger.logMessage('Started recording', 'INFO');
 
-            this.startRecordingUI();
+            // Update UI
+            document.getElementById('startRecording')?.classList.add('hidden');
+            document.getElementById('stopRecording')?.classList.remove('hidden');
+
         } catch (error) {
-            AppLogger.logMessage(`Failed to start recording: ${error.message}`, 'ERROR');
-            throw error;
+            AppLogger.logMessage(`Failed to start recording: ${error}`, 'ERROR');
         }
     },
 
-    stopRecording() {
-        if (this.isRecording) {
+    async stopRecording() {
+        try {
             AppLogger.logMessage('Stopping recording...', 'INFO');
-            
-            this.isRecording = false;
-            
-            // Cleanup audio context
+
+            // Send any remaining audio data in the worklet
+            if (this.audioWorklet) {
+                this.audioWorklet.port.postMessage({ type: 'flush' });
+                // Longer delay to ensure final audio chunk is processed
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+
+            // Stop the media stream
+            if (this.stream) {
+                this.stream.getTracks().forEach(track => track.stop());
+                this.stream = null;
+            }
+
+            // Clean up audio context
             if (this.audioWorklet) {
                 this.audioWorklet.disconnect();
                 this.audioWorklet = null;
@@ -455,59 +489,44 @@ const AudioRecorder = {
                 this.mediaStreamSource = null;
             }
             if (this.audioContext) {
-                this.audioContext.close();
+                await this.audioContext.close();
                 this.audioContext = null;
             }
-            
-            // Stop all tracks
-            if (this.stream) {
-                this.stream.getTracks().forEach(track => track.stop());
-                this.stream = null;
-            }
-            
+
             // Send end signal
-            if (this.webSocket?.readyState === WebSocket.OPEN) {
+            if (this.webSocket && this.webSocket.readyState === WebSocket.OPEN) {
                 this.webSocket.send(JSON.stringify({
-                    chunk_type: 'end',
+                    chunk_type: "end",
                     timestamp: Date.now()
                 }));
                 AppLogger.logMessage('Sent end signal to server', 'INFO');
             }
-            
-            this.stopRecordingUI();
+
+            this.isRecording = false;
+
+            // Update UI
+            document.getElementById('startRecording')?.classList.remove('hidden');
+            document.getElementById('stopRecording')?.classList.add('hidden');
+
+        } catch (error) {
+            AppLogger.logMessage(`Error stopping recording: ${error}`, 'ERROR');
         }
-    },
-
-    startRecordingUI() {
-        document.getElementById('startRecording').classList.add('hidden');
-        document.getElementById('stopRecording').classList.remove('hidden');
-        document.getElementById('status').textContent = 'Recording...';
-    },
-
-    stopRecordingUI() {
-        document.getElementById('stopRecording').classList.add('hidden');
-        document.getElementById('startRecording').classList.remove('hidden');
-        document.getElementById('status').textContent = 'Ready to record';
-    },
-
-    base64ToBlob(base64, type = 'audio/wav') {
-        const binStr = atob(base64);
-        const len = binStr.length;
-        const arr = new Uint8Array(len);
-        for (let i = 0; i < len; i++) {
-            arr[i] = binStr.charCodeAt(i);
-        }
-        return new Blob([arr], { type });
     }
 };
 
+// Initialize the recorder when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-    try {
-        AudioRecorder.init();
-    } catch (error) {
-        AppLogger.logMessage(`Initialization failed: ${error.message}`, 'ERROR');
-        document.getElementById('status').textContent = 'Error: Recording not supported';
-    }
+    AudioRecorder.init();
 });
+
+function base64ToBlob(base64, type = 'audio/wav') {
+    const binStr = atob(base64);
+    const len = binStr.length;
+    const arr = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+        arr[i] = binStr.charCodeAt(i);
+    }
+    return new Blob([arr], { type });
+}
 </script>
 {% endblock %} 
