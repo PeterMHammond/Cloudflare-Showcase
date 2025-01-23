@@ -5,7 +5,8 @@ window.AppLogger = {
         SUCCESS: '✅',
         WARNING: '⚠️',
         ERROR: '❌',
-        DEBUG: '🔍'
+        DEBUG: '🔍',
+        WEBSOCKET: ''  // WebSocket messages bring their own icons
     },
 
     truncateValue: function(value, maxLength = 100) {
@@ -30,7 +31,7 @@ window.AppLogger = {
         return truncated;
     },
 
-    logMessage: function(msg, level = 'INFO') {
+    logMessage: function(msg, level = 'INFO', customIcon = null) {
         const logDiv = document.getElementById('message-log');
         if (!logDiv) return;
 
@@ -68,7 +69,8 @@ window.AppLogger = {
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;');
 
-        logEntry.innerHTML = `[${timestamp}] ${this.ICONS[level]} ${formattedMsg}`;
+        const icon = customIcon || this.ICONS[level];
+        logEntry.innerHTML = `[${timestamp}] ${icon} ${formattedMsg}`;
         
         logDiv.appendChild(logEntry);
         logDiv.scrollTop = logDiv.scrollHeight;

@@ -48,13 +48,14 @@ htmx.defineExtension('ws-debug', {
                 // Remove audio_data before logging
                 const { audio_data, ...cleanMsg } = jsonMsg;
                 displayMsg = JSON.stringify(cleanMsg);
-                msgType = '{json} ';
+                msgType = '{json}';
             }
         } catch (e) {
-            msgType = '[text] ';
+            msgType = '[text]';
         }
 
-        AppLogger.logMessage(`${ARROWS[direction]} ${msgType}${displayMsg}`, direction === 'ERROR' ? 'ERROR' : 'INFO');
+        // Pass the message directly to AppLogger without its own icon system
+        AppLogger.logMessage(`${msgType} ${displayMsg}`, 'WEBSOCKET', ARROWS[direction]);
     }
 });
 
