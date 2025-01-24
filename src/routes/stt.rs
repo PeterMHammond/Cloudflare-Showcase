@@ -194,19 +194,43 @@ impl SttDO {
     }
 
     // Confidence thresholds for transcription quality
-    const MIN_AVG_LOGPROB: f64 = -0.7;          // Strict cutoff for word prediction confidence
-    const MAX_NO_SPEECH_PROB: f64 = 0.1;        // Must be confident this is speech
-    const MAX_COMPRESSION_RATIO: f64 = 2.0;      // Reasonable compression ratio limit
-    const MAX_TEMPERATURE: f64 = 0.2;           // Low temperature for deterministic results
-    const MIN_WORD_DURATION: f64 = 0.05;        // Minimum word duration
-    const MIN_CONFIDENCE_SCORE: f64 = 0.5;      // Slightly lower threshold for overall confidence
+    const MIN_AVG_LOGPROB: f64 = -0.7;          // Base threshold for avg_logprob
+    const MIN_AVG_LOGPROB_SHORT: f64 = -0.9;    // More lenient threshold for short utterances
+    const MAX_NO_SPEECH_PROB: f64 = 0.3;        // Increased to allow quieter speech
+    const MAX_COMPRESSION_RATIO: f64 = 2.0;      // Keep this as is
+    const MAX_TEMPERATURE: f64 = 0.5;           // Increased from 0.2 to allow more variation
+    const MIN_WORD_DURATION: f64 = 0.03;        // Minimum word duration
+    const MAX_WORD_DURATION: f64 = 2.0;         // Maximum reasonable word duration
+    const MIN_CONFIDENCE_SCORE: f64 = 0.4;      // Threshold for overall confidence
+    const MIN_AUDIO_ENERGY: f64 = 0.01;         // Threshold for audio energy
+    const SHORT_UTTERANCE_WORDS: usize = 2;     // Number of words considered a short utterance
 
     fn calculate_confidence_score(segment: &Segment) -> f64 {
         // 1. First check critical thresholds that should fail immediately
         if let Some(prob) = segment.avg_logprob {
-            if prob < Self::MIN_AVG_LOGPROB {
-                console_log!("Failed confidence check: avg_logprob {} below threshold {}", 
-                    prob, Self::MIN_AVG_LOGPROB);
+            // Use more lenient threshold for short utterances
+            let is_short_utterance = segment.words.as_ref()
+                .map(|words| words.len() <= Self::SHORT_UTTERANCE_WORDS)
+                .unwrap_or(false);
+            
+            let threshold = if is_short_utterance {
+                Self::MIN_AVG_LOGPROB_SHORT
+            } else {
+                Self::MIN_AVG_LOGPROB
+            };
+
+            if prob < threshold {
+                console_log!("Failed confidence check: avg_logprob {:.3} below {} threshold {}", 
+                    prob, 
+                    if is_short_utterance { "short utterance" } else { "standard" },
+                    threshold);
+                return 0.0;
+            }
+
+            // Calculate normalized score relative to the threshold
+            let norm_score = (prob - threshold) / (-0.1 - threshold);
+            if norm_score <= 0.0 {
+                console_log!("Failed confidence check: normalized avg_logprob score {:.3} too low", norm_score);
                 return 0.0;
             }
         }
@@ -227,68 +251,88 @@ impl SttDO {
             }
         }
 
-        // 2. Check word timings - must all be valid
+        // 2. Check word timings with strict validation
         if let Some(words) = &segment.words {
             for word in words {
                 let duration = word.end - word.start;
+                
+                // Check for invalid timing
                 if word.start == 0.0 && word.end == 0.0 {
                     console_log!("Failed confidence check: word '{}' has invalid timing", word.word);
                     return 0.0;
                 }
-                if duration < Self::MIN_WORD_DURATION {
-                    console_log!("Failed confidence check: word '{}' duration {}s below threshold {}s", 
-                        word.word, duration, Self::MIN_WORD_DURATION);
+
+                // Check for unreasonably long word duration
+                if duration > Self::MAX_WORD_DURATION {
+                    console_log!("Failed confidence check: word '{}' duration {}s exceeds maximum {}s", 
+                        word.word, duration, Self::MAX_WORD_DURATION);
+                    return 0.0;
+                }
+
+                // Check for unreasonably short duration based on word length
+                let word_length = word.word.trim().len() as f64;
+                let min_duration = Self::MIN_WORD_DURATION * word_length.max(1.0);
+                if duration < min_duration {
+                    console_log!("Failed confidence check: word '{}' duration {}s below minimum {}s for length {}", 
+                        word.word, duration, min_duration, word_length);
                     return 0.0;
                 }
             }
-        }
 
-        // 3. Calculate final score only if all critical checks pass
-        let mut score = 1.0;
-
-        // Scale log probability between MIN_AVG_LOGPROB and 0.0
-        if let Some(prob) = segment.avg_logprob {
-            // Normalize logprob to 0.5-1.0 range for good values
-            let norm_score = (prob - Self::MIN_AVG_LOGPROB) / (0.0 - Self::MIN_AVG_LOGPROB);
-            score *= 0.5 + (norm_score * 0.5);
-        }
-
-        // Small penalty for high compression ratio
-        if let Some(ratio) = segment.compression_ratio {
-            if ratio > Self::MAX_COMPRESSION_RATIO {
-                score *= 0.8;
+            // Check total segment duration vs word count
+            let total_duration = words.last().map(|w| w.end).unwrap_or(0.0) 
+                             - words.first().map(|w| w.start).unwrap_or(0.0);
+            let word_count = words.len() as f64;
+            let avg_duration = total_duration / word_count;
+            if avg_duration > Self::MAX_WORD_DURATION {
+                console_log!("Failed confidence check: average word duration {}s exceeds maximum", 
+                    avg_duration);
+                return 0.0;
             }
         }
 
-        // Small penalty for non-zero temperature
+        // 3. Calculate weighted score components
+        let mut score = 1.0;
+
+        // Weight avg_logprob heavily (80% of score)
+        if let Some(prob) = segment.avg_logprob {
+            let threshold = if segment.words.as_ref().map(|w| w.len() <= Self::SHORT_UTTERANCE_WORDS).unwrap_or(false) {
+                Self::MIN_AVG_LOGPROB_SHORT
+            } else {
+                Self::MIN_AVG_LOGPROB
+            };
+            let norm_score = (prob - threshold) / (-0.1 - threshold);
+            score *= 0.8 + (norm_score.max(0.0) * 0.2);
+        }
+
+        // Apply smaller penalties for other metrics
+        if let Some(ratio) = segment.compression_ratio {
+            if ratio > Self::MAX_COMPRESSION_RATIO {
+                score *= 0.95; // Very small penalty
+            }
+        }
+
         if let Some(temp) = segment.temperature {
-            score *= 1.0 - (temp / Self::MAX_TEMPERATURE) * 0.2;
+            score *= 1.0 - (temp / Self::MAX_TEMPERATURE) * 0.05; // Minimal temperature penalty
+        }
+
+        if let Some(prob) = segment.no_speech_prob {
+            score *= 1.0 - (prob / Self::MAX_NO_SPEECH_PROB); // Scaled penalty based on threshold
         }
 
         console_log!("Final confidence score: {:.3}", score);
         score
     }
 
-    fn is_high_confidence(segment: &Segment) -> bool {
-        // First check if this is likely a number sequence
-        let text = segment.text.trim();
-        let is_number_sequence = text.chars().any(|c| c.is_numeric()) && 
-                               text.chars().all(|c| c.is_numeric() || c.is_whitespace() || c == '.' || c == ',');
-        
-        // Calculate composite confidence score
-        let confidence_score = Self::calculate_confidence_score(segment);
-        
-        // Use appropriate threshold based on content type
-        let min_score = if is_number_sequence {
-            Self::MIN_CONFIDENCE_SCORE
-        } else {
-            Self::MIN_CONFIDENCE_SCORE
-        };
-
-        confidence_score >= min_score
-    }
-
     async fn process_audio_chunk(&mut self, audio_samples: Vec<u8>, is_streaming: bool) -> Result<()> {
+        // Calculate audio energy first
+        let energy = Self::calculate_audio_energy(&audio_samples);
+        if energy < Self::MIN_AUDIO_ENERGY {
+            console_log!("Audio energy {} below threshold {}, skipping transcription", 
+                energy, Self::MIN_AUDIO_ENERGY);
+            return Ok(());
+        }
+        
         let ai = self.env.ai("AI")?;
         
         // Create WAV header and combine with audio data
@@ -309,33 +353,46 @@ impl SttDO {
                     }
                 };
                 
-                console_log!("Whisper response: {:?}", whisper_response);
-                
                 if !whisper_response.text.is_empty() {
                     console_log!("Processing non-empty transcription: \"{}\"", whisper_response.text);
-                    
-                    let first_segment = whisper_response.segments.as_ref()
-                        .and_then(|segments| segments.first());
-                    
-                    console_log!("Checking confidence metrics...");
-                    // Check if this is a high confidence transcription using all metrics
-                    let is_high_confidence = first_segment
-                        .map(|segment| {
-                            let result = Self::is_high_confidence(segment);
-                            console_log!("Confidence check result: {}", result);
-                            result
-                        })
-                        .unwrap_or_else(|| {
-                            console_log!("No segment found, defaulting to low confidence");
-                            false
-                        });
 
-                    if is_high_confidence {
+                    // First check critical thresholds on first segment
+                    let should_process = whisper_response.segments.as_ref()
+                        .and_then(|segments| segments.first())
+                        .map(|segment| {
+                            // Use calculate_confidence_score to check all critical thresholds
+                            let score = Self::calculate_confidence_score(segment);
+                            if score == 0.0 {
+                                console_log!("Failed critical thresholds check");
+                                return false;
+                            }
+                            true
+                        })
+                        .unwrap_or(false);
+
+                    if !should_process {
+                        console_log!("Skipping transcription due to failed critical thresholds");
+                        return Ok(());
+                    }
+
+                    // Only calculate overall confidence if critical thresholds pass
+                    let overall_confidence = whisper_response.segments.as_ref()
+                        .map(|segments| Self::calculate_overall_confidence(segments))
+                        .unwrap_or(0.0);
+
+                    console_log!("Overall confidence score: {:.3}", overall_confidence);
+                    
+                    if overall_confidence >= Self::MIN_CONFIDENCE_SCORE {
                         console_log!("VERIFIED HIGH CONFIDENCE: Broadcasting to {} clients", 
                             self.state.get_websockets().len());
+
+                        // Get the first segment for additional metrics
+                        let first_segment = whisper_response.segments.as_ref()
+                            .and_then(|segments| segments.first());
+
                         self.broadcast_transcription(TranscriptionResult {
                             text: whisper_response.text,
-                            is_final: !is_streaming,  // Set is_final based on streaming status
+                            is_final: !is_streaming,
                             word_count: whisper_response.word_count.map(|w| w as u32),
                             words: first_segment.and_then(|segment| segment.words.clone()),
                             vtt: whisper_response.vtt,
@@ -349,31 +406,31 @@ impl SttDO {
                         }).await?;
                         console_log!("Successfully sent transcription to client");
                     } else {
-                        // Log which metrics failed
-                        if let Some(segment) = first_segment {
-                            console_log!("Filtering out low confidence transcription:");
-                            console_log!("  text: \"{}\"", whisper_response.text);
+                        // Log detailed metrics for debugging
+                        console_log!("Filtering out low confidence transcription:");
+                        console_log!("  text: \"{}\"", whisper_response.text);
+                        console_log!("  overall_confidence: {:.3} (threshold: {})", 
+                            overall_confidence, Self::MIN_CONFIDENCE_SCORE);
+                        console_log!("  audio_energy: {:.3} (threshold: {})", 
+                            energy, Self::MIN_AUDIO_ENERGY);
+
+                        if let Some(segment) = whisper_response.segments.as_ref().and_then(|s| s.first()) {
                             if let Some(prob) = segment.avg_logprob {
-                                console_log!("  avg_logprob: {} (threshold: {}) - {}", 
-                                    prob, Self::MIN_AVG_LOGPROB, 
-                                    if prob > Self::MIN_AVG_LOGPROB { "PASS" } else { "FAIL" });
+                                console_log!("  avg_logprob: {:.3} (threshold: {})", 
+                                    prob, Self::MIN_AVG_LOGPROB);
                             }
                             if let Some(prob) = segment.no_speech_prob {
-                                console_log!("  no_speech_prob: {} (threshold: {}) - {}", 
-                                    prob, Self::MAX_NO_SPEECH_PROB,
-                                    if prob < Self::MAX_NO_SPEECH_PROB { "PASS" } else { "FAIL" });
+                                console_log!("  no_speech_prob: {:.3} (threshold: {})", 
+                                    prob, Self::MAX_NO_SPEECH_PROB);
                             }
                             if let Some(ratio) = segment.compression_ratio {
-                                console_log!("  compression_ratio: {} (threshold: {}) - {}", 
-                                    ratio, Self::MAX_COMPRESSION_RATIO,
-                                    if ratio < Self::MAX_COMPRESSION_RATIO { "PASS" } else { "FAIL" });
+                                console_log!("  compression_ratio: {:.3} (threshold: {})", 
+                                    ratio, Self::MAX_COMPRESSION_RATIO);
                             }
                             if let Some(temp) = segment.temperature {
-                                console_log!("  temperature: {} (threshold: {}) - {}", 
-                                    temp, Self::MAX_TEMPERATURE,
-                                    if temp <= Self::MAX_TEMPERATURE { "PASS" } else { "FAIL" });
+                                console_log!("  temperature: {:.3} (threshold: {})", 
+                                    temp, Self::MAX_TEMPERATURE);
                             }
-                            console_log!("Transcription filtered out due to low confidence");
                         }
                     }
                 }
@@ -392,6 +449,45 @@ impl SttDO {
             let _ = conn.send(&result);
         }
         Ok(())
+    }
+
+    fn calculate_audio_energy(audio_samples: &[u8]) -> f64 {
+        // Convert bytes to PCM samples (assuming 16-bit PCM)
+        let samples: Vec<i16> = audio_samples.chunks(2)
+            .filter_map(|chunk| {
+                if chunk.len() == 2 {
+                    Some(i16::from_le_bytes([chunk[0], chunk[1]]))
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        if samples.is_empty() {
+            return 0.0;
+        }
+
+        let sum_squares: f64 = samples.iter()
+            .map(|&s| s as f64 * s as f64)
+            .sum();
+        (sum_squares / samples.len() as f64).sqrt()
+    }
+
+    fn calculate_overall_confidence(segments: &[Segment]) -> f64 {
+        let mut total_score = 0.0;
+        let mut count = 0;
+
+        for segment in segments {
+            let score = Self::calculate_confidence_score(segment);
+            total_score += score;
+            count += 1;
+        }
+
+        if count > 0 {
+            total_score / count as f64
+        } else {
+            0.0
+        }
     }
 }
 

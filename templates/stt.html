@@ -66,63 +66,54 @@ htmx.defineExtension("ws-connection-status", {
         if (!connectionStatus || !startButton) return;
 
         const baseClasses = "inline-block text-sm font-medium rounded-full px-4 py-1 w-fit";
-        const buttonBaseClasses = "bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded flex items-center";
 
         switch (name) {
             case "htmx:wsConnecting":
                 connectionStatus.textContent = "Connecting...";
                 connectionStatus.className = `${baseClasses} bg-yellow-100 text-yellow-600`;
                 startButton.disabled = true;
-                startButton.className = `${buttonBaseClasses} opacity-50 cursor-not-allowed`;
                 break;
             case "htmx:wsOpen":
                 connectionStatus.textContent = "Connected";
                 connectionStatus.className = `${baseClasses} bg-green-100 text-green-600`;
                 startButton.disabled = false;
-                startButton.className = buttonBaseClasses;
                 break;
             case "htmx:wsClose":
                 connectionStatus.textContent = "Disconnected - Reconnecting...";
                 connectionStatus.className = `${baseClasses} bg-red-100 text-red-600`;
                 startButton.disabled = true;
-                startButton.className = `${buttonBaseClasses} opacity-50 cursor-not-allowed`;
                 break;
         }
     }
 });
 </script>
-
 <div class="container mx-auto px-4 py-8"
      hx-ext="ws,ws-debug,ws-connection-status"
      ws-connect="/stt/ws">
     <div class="relative">
         <!-- Connection Status Badge -->
-        <aside id="connection-status" 
-               class="absolute left-1/2 -translate-x-1/2 -top-3 z-10 inline-block text-sm font-medium rounded-full px-4 py-1 w-fit bg-red-100 text-red-600 shadow-sm">
+        <h1 class="text-3xl font-bold mb-2">Speech to Text</h1>
+        <aside id="connection-status" class="absolute left-1/2 -translate-x-1/2 -top-3 z-10 inline-block text-sm font-medium rounded-full px-4 py-1 w-fit bg-red-100 text-red-600 shadow-sm">
             Disconnected
-        </aside>
-        
-        <h1 class="text-3xl font-bold mb-6">Speech to Text</h1>
+        </aside>  
         <div class="bg-white shadow-md rounded-lg p-6">
             <p class="text-gray-600 mb-4">Convert your speech to text using advanced AI technology.</p>
             <div class="space-y-4">
                 <div class="flex space-x-4">
-                    <button id="startRecording" disabled class="bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded flex items-center opacity-50 cursor-not-allowed">
+                    <button id="startRecording" disabled 
+                            class="relative bg-blue-500 text-white font-semibold py-2 px-4 rounded flex items-center select-none touch-none shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                            oncontextmenu="return false;">
                         <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <circle cx="12" cy="12" r="6" fill="currentColor"/>
                         </svg>
-                        Start Recording
-                    </button>
-                    <button id="stopRecording" class="bg-red-500 hover:bg-red-600 text-white font-semibold py-2 px-4 rounded hidden flex items-center">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <rect x="8" y="8" width="8" height="8" fill="currentColor"/>
-                        </svg>
-                        Stop Recording
+                        Hold to Speak
                     </button>
                 </div>
-                <div id="recordingTime" class="text-xl font-mono text-gray-600 hidden">00:00</div>
-                <div id="audioPreview" class="hidden">
-                    <audio id="recordingPlayback" controls class="w-full"></audio>
+                <div id="recordingStatus" class="text-sm font-medium text-red-500 hidden">
+                    <span class="inline-flex items-center">
+                        <span class="w-2 h-2 bg-red-500 rounded-full mr-2 animate-pulse"></span>
+                        Recording...
+                    </span>
                 </div>
                 <div id="status" class="text-gray-600 font-medium"></div>
                 <div id="word-count" class="text-sm text-gray-500">Words: 0</div>
@@ -137,10 +128,6 @@ htmx.defineExtension("ws-connection-status", {
                         <label for="word-timing" class="block text-sm font-medium text-gray-700 mb-1">Word Timing</label>
                         <textarea id="word-timing" class="w-full h-32 p-2 border rounded-lg" placeholder="Word timing will appear here..." readonly></textarea>
                     </div>
-                </div>
-                <div>
-                    <label for="vtt-content" class="block text-sm font-medium text-gray-700 mb-1">VTT Subtitles</label>
-                    <textarea id="vtt-content" class="w-full h-32 p-2 border rounded-lg font-mono text-sm" placeholder="VTT content will appear here..." readonly></textarea>
                 </div>
             </div>
         </div>
@@ -253,12 +240,39 @@ const AudioRecorder = {
         }
         AppLogger.logMessage('Audio recording is supported', 'SUCCESS');
 
-        // Setup click handlers
-        const startButton = document.getElementById('startRecording');
-        const stopButton = document.getElementById('stopRecording');
+        // Setup push-to-talk handlers
+        const recordButton = document.getElementById('startRecording');
+        const recordingStatus = document.getElementById('recordingStatus');
         
-        startButton?.addEventListener('click', () => this.startRecording());
-        stopButton?.addEventListener('click', () => this.stopRecording());
+        if (recordButton) {
+            // Start recording when button is pressed
+            const startRecording = (e) => {
+                if (recordButton.disabled) return;
+                e.preventDefault();
+                recordButton.style.transform = 'translateY(2px)';
+                recordButton.style.backgroundColor = '#2563eb'; // blue-600
+                recordButton.style.boxShadow = 'inset 0 2px 4px 0 rgba(0, 0, 0, 0.1)';
+                this.startRecording();
+                recordingStatus?.classList.remove('hidden');
+            };
+
+            // Stop recording when button is released
+            const stopRecording = () => {
+                if (recordButton.disabled) return;
+                recordButton.style.transform = '';
+                recordButton.style.backgroundColor = '';
+                recordButton.style.boxShadow = '';
+                this.stopRecording();
+                recordingStatus?.classList.add('hidden');
+            };
+
+            recordButton.addEventListener('mousedown', startRecording);
+            recordButton.addEventListener('touchstart', startRecording);
+            recordButton.addEventListener('mouseup', stopRecording);
+            recordButton.addEventListener('mouseleave', stopRecording);
+            recordButton.addEventListener('touchend', stopRecording);
+            recordButton.addEventListener('touchcancel', stopRecording);
+        }
 
         // Setup WebSocket handlers
         document.body.addEventListener('htmx:wsOpen', (e) => {
@@ -280,11 +294,6 @@ const AudioRecorder = {
                 if (typeof e.detail.message === 'string') {
                     const data = JSON.parse(e.detail.message);
                     
-                    // Skip the welcome message as it's handled by the server
-                    if (data.text === "Connected! Click Start Recording to begin...") {
-                        return;
-                    }
-
                     // Update transcription display
                     const container = document.getElementById('transcription-container');
                     if (container) {
@@ -330,9 +339,11 @@ const AudioRecorder = {
                             entry.appendChild(buttonContainer);
                         }
 
-                        // Add text
+                        // Add text with appropriate styling for welcome message
                         const text = document.createElement('span');
-                        text.className = 'flex-grow';
+                        text.className = data.text === "Connected! Click Start Recording to begin..." 
+                            ? 'flex-grow text-green-600 font-medium'  // Special styling for welcome message
+                            : 'flex-grow';
                         text.textContent = data.text;
                         entry.appendChild(text);
                         
@@ -341,38 +352,34 @@ const AudioRecorder = {
                         container.scrollTop = container.scrollHeight;
                     }
 
-                    // Update word timing display
-                    const wordTimingArea = document.getElementById('word-timing');
-                    if (wordTimingArea && data.words) {
-                        const wordTiming = data.words.map(w => 
-                            `${w.word.trim()}: ${w.start.toFixed(2)}s - ${w.end.toFixed(2)}s`
-                        ).join('\n');
-                        wordTimingArea.value = wordTiming;
-                        wordTimingArea.scrollTop = wordTimingArea.scrollHeight;
-                    }
-
-                    // Update VTT display
-                    const vttArea = document.getElementById('vtt-content');
-                    if (vttArea && data.vtt) {
-                        vttArea.value = data.vtt;
-                        vttArea.scrollTop = vttArea.scrollHeight;
-                    }
-
-                    // Update word count
-                    if (data.word_count) {
-                        const wordCountElement = document.getElementById('word-count');
-                        if (wordCountElement) {
-                            wordCountElement.textContent = `Words: ${data.word_count}`;
+                    // Only process additional displays for non-welcome messages
+                    if (data.text !== "Connected! Click Start Recording to begin...") {
+                        // Update word timing display
+                        const wordTimingArea = document.getElementById('word-timing');
+                        if (wordTimingArea && data.words) {
+                            const wordTiming = data.words.map(w => 
+                                `${w.word.trim()}: ${w.start.toFixed(2)}s - ${w.end.toFixed(2)}s`
+                            ).join('\n');
+                            wordTimingArea.value = wordTiming;
+                            wordTimingArea.scrollTop = wordTimingArea.scrollHeight;
                         }
-                    }
 
-                    // Log metrics if available
-                    if (data.avg_logprob !== null) {
-                        AppLogger.logMessage(`Confidence Metrics:
-                            avg_logprob: ${data.avg_logprob?.toFixed(4)}
-                            no_speech_prob: ${data.no_speech_prob?.toFixed(4)}
-                            temperature: ${data.temperature?.toFixed(4)}
-                            compression_ratio: ${data.compression_ratio?.toFixed(4)}`, 'INFO');
+                        // Update word count
+                        if (data.word_count) {
+                            const wordCountElement = document.getElementById('word-count');
+                            if (wordCountElement) {
+                                wordCountElement.textContent = `Words: ${data.word_count}`;
+                            }
+                        }
+
+                        // Log metrics if available
+                        if (data.avg_logprob !== null) {
+                            AppLogger.logMessage(`Confidence Metrics:
+                                avg_logprob: ${data.avg_logprob?.toFixed(4)}
+                                no_speech_prob: ${data.no_speech_prob?.toFixed(4)}
+                                temperature: ${data.temperature?.toFixed(4)}
+                                compression_ratio: ${data.compression_ratio?.toFixed(4)}`, 'INFO');
+                        }
                     }
                 }
             } catch (error) {
@@ -454,10 +461,6 @@ const AudioRecorder = {
             this.isRecording = true;
             AppLogger.logMessage('Started recording', 'INFO');
 
-            // Update UI
-            document.getElementById('startRecording')?.classList.add('hidden');
-            document.getElementById('stopRecording')?.classList.remove('hidden');
-
         } catch (error) {
             AppLogger.logMessage(`Failed to start recording: ${error}`, 'ERROR');
         }
@@ -505,12 +508,8 @@ const AudioRecorder = {
 
             this.isRecording = false;
 
-            // Update UI
-            document.getElementById('startRecording')?.classList.remove('hidden');
-            document.getElementById('stopRecording')?.classList.add('hidden');
-
         } catch (error) {
-            AppLogger.logMessage(`Error stopping recording: ${error}`, 'ERROR');
+            AppLogger.logMessage(`Failed to stop recording: ${error}`, 'ERROR');
         }
     }
 };
