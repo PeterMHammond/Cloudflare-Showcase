@@ -65,16 +65,7 @@
                         Export SQL Script
                     </button>
                     <div class="text-xs text-gray-600 mt-1">
-                        Standard SQL script - works with any SQLite tool
-                    </div>
-                </div>
-                <div class="relative">
-                    <button onclick="exportDatabaseFile()" 
-                            class="w-full bg-indigo-500 text-white py-2 px-4 rounded-md hover:bg-indigo-600 transition-colors">
-                        Export Enhanced SQL
-                    </button>
-                    <div class="text-xs text-gray-600 mt-1">
-                        Optimized SQL import script with transaction support - easy to import
+                        SQL script - works with any SQLite tool
                     </div>
                 </div>
                 <button onclick="deleteOldMessages()" 
@@ -292,34 +283,6 @@ async function exportDatabase() {
     }
 }
 
-// Export enhanced SQL file with transaction support
-async function exportDatabaseFile() {
-    try {
-        logSQL('DUMP', 'Exporting enhanced SQL with transaction support');
-        const response = await fetch(`${API_BASE}/export-file`);
-        
-        if (!response.ok) {
-            const error = await response.text();
-            throw new Error(`Export failed: ${error}`);
-        }
-        
-        const blob = await response.blob();
-        logSQL('DUMP', `Enhanced SQL received: ${blob.size} bytes`);
-        
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `sqlite-import-${Date.now()}.sql`;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        
-        logSQL('DUMP', 'Enhanced SQL file exported successfully');
-    } catch (error) {
-        console.error('Error exporting SQL file:', error);
-        logSQL('ERROR', `Enhanced SQL export failed: ${error.message}`);
-    }
-}
 
 // Initialize
 loadMessages();
