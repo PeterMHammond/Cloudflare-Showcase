@@ -1,0 +1,1 @@
+SELECT * FROM messages WHERE user_id = '{}' ORDER BY timestamp DESC

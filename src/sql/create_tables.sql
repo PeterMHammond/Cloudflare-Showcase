@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp INTEGER NOT NULL,
+    content TEXT NOT NULL,
+    user_id TEXT NOT NULL
+)

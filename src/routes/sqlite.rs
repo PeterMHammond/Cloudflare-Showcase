@@ -23,7 +23,7 @@ pub async fn handler(_req: Request, ctx: RouteContext<ValidationState>) -> Resul
 pub async fn api_handler(req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     console_log!("SQLite API handler called: {} {}", req.method(), req.url()?.path());
     
-    let namespace = ctx.env.durable_object("ExampleSqliteDO")?;
+    let namespace = ctx.env.durable_object("SqliteDO")?;
     // Use a consistent ID for the demo to maintain state across requests
     let stub = namespace.id_from_name("sqlite-demo-instance")?.get_stub()?;
     
