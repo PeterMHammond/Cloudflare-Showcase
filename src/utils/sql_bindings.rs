@@ -139,9 +139,14 @@ pub trait SqlStorageExt {
 // Since Storage wraps DurableObjectStorage, we need to access the inner field
 impl SqlStorageExt for worker::Storage {
     fn sql(&self) -> Result<SqlStorage> {
-        // Worker-rs doesn't yet expose the sql property on DurableObjectStorage
-        // This is a placeholder that returns an error until workers-rs is updated
-        Err(Error::RustError("SQLite storage is not yet exposed in workers-rs. Please use JavaScript/TypeScript for SQLite in Durable Objects for now.".to_string()))
+        // PR #727 (https://github.com/cloudflare/workers-rs/pull/727) adds sql() method to Storage
+        // Until that PR is merged and released, SQLite is not accessible from workers-rs
+        Err(Error::RustError(
+            "SQLite storage is not yet available in workers-rs. \
+            PR #727 adds this functionality, but it's not merged yet. \
+            Please use JavaScript/TypeScript for SQLite in Durable Objects for now."
+                .to_string(),
+        ))
     }
 }
 
