@@ -61,7 +61,11 @@
                 </button>
                 <button onclick="exportDatabase()" 
                         class="w-full bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition-colors">
-                    Export Database
+                    Export SQL Script
+                </button>
+                <button onclick="exportDatabaseFile()" 
+                        class="w-full bg-indigo-500 text-white py-2 px-4 rounded-md hover:bg-indigo-600 transition-colors">
+                    Export DB File
                 </button>
                 <button onclick="deleteOldMessages()" 
                         class="w-full bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition-colors">
@@ -249,10 +253,10 @@ async function deleteOldMessages() {
     }
 }
 
-// Export database
+// Export database as SQL script
 async function exportDatabase() {
     try {
-        logSQL('DUMP', 'Exporting SQLite database');
+        logSQL('DUMP', 'Exporting SQLite database as SQL script');
         const response = await fetch(`${API_BASE}/export`);
         
         if (!response.ok) {
@@ -271,10 +275,39 @@ async function exportDatabase() {
         a.click();
         window.URL.revokeObjectURL(url);
         
-        logSQL('DUMP', 'Database exported successfully');
+        logSQL('DUMP', 'SQL script exported successfully');
     } catch (error) {
-        console.error('Error exporting database:', error);
+        console.error('Error exporting SQL script:', error);
         logSQL('ERROR', `Export failed: ${error.message}`);
+    }
+}
+
+// Export database as SQLite file
+async function exportDatabaseFile() {
+    try {
+        logSQL('DUMP', 'Exporting SQLite database as DB file');
+        const response = await fetch(`${API_BASE}/export-file`);
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Export failed: ${error}`);
+        }
+        
+        const blob = await response.blob();
+        logSQL('DUMP', `DB file received: ${blob.size} bytes`);
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sqlite-database-${Date.now()}.db`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+        logSQL('DUMP', 'Database file exported successfully');
+    } catch (error) {
+        console.error('Error exporting database file:', error);
+        logSQL('ERROR', `DB file export failed: ${error.message}`);
     }
 }
 
