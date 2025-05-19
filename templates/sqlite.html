@@ -65,7 +65,7 @@
                 </button>
                 <button onclick="deleteOldMessages()" 
                         class="w-full bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition-colors">
-                    Delete Old Messages (24h)
+                    Delete Messages
                 </button>
             </div>
         </section>
@@ -229,13 +229,13 @@ function filterMessages() {
     }
 }
 
-// Delete old messages
+// Delete all messages
 async function deleteOldMessages() {
-    if (!confirm('Delete all messages older than 24 hours?')) return;
+    if (!confirm('Delete all messages?')) return;
     
     try {
-        logSQL('DELETE', 'Deleting messages older than 24 hours');
-        const response = await fetch(`${API_BASE}/old?hours=24`, {
+        logSQL('DELETE', 'Deleting all messages');
+        const response = await fetch(`${API_BASE}/messages`, {
             method: 'DELETE'
         });
         

@@ -429,6 +429,19 @@ impl DurableObject for ExampleSqliteDO {
                 }))
             }
             
+            (Method::Delete, "/old") => {
+                // Remove this endpoint - we should just use the /messages endpoint
+                // For backward compatibility, we'll just redirect to /messages
+                console_log!("DELETE /old route is deprecated, redirecting to /messages");
+                let deleted = self.delete_messages().await?;
+                console_log!("Deleted {} messages", deleted);
+                
+                Response::from_json(&serde_json::json!({
+                    "deleted": deleted,
+                    "message": "All messages deleted successfully"
+                }))
+            }
+            
             (Method::Get, "/stats") => {
                 let stats = self.get_statistics().await?;
                 Response::from_json(&stats)
