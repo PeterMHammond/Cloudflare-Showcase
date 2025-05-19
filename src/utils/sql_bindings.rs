@@ -1,7 +1,9 @@
-use wasm_bindgen::prelude::*;
-use worker::*;
+use worker::{Error, Storage, wasm_bindgen, js_sys};
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::*;
 use js_sys::{Array, Object, Reflect};
+
+type Result<T> = std::result::Result<T, Error>;
 
 // SqlStorage interface that provides access to SQL methods
 #[wasm_bindgen]
@@ -10,16 +12,16 @@ extern "C" {
     pub type SqlStorage;
 
     #[wasm_bindgen(method, catch)]
-    pub fn exec(this: &SqlStorage, query: &str) -> Result<SqlStorageCursor, JsValue>;
+    pub fn exec(this: &SqlStorage, query: &str) -> std::result::Result<SqlStorageCursor, JsValue>;
 
     #[wasm_bindgen(method, catch, variadic)]
-    pub fn exec_with_bindings(this: &SqlStorage, query: &str, bindings: &Array) -> Result<SqlStorageCursor, JsValue>;
+    pub fn exec_with_bindings(this: &SqlStorage, query: &str, bindings: &Array) -> std::result::Result<SqlStorageCursor, JsValue>;
 
     #[wasm_bindgen(method, catch)]
-    pub fn prepare(this: &SqlStorage, query: &str) -> Result<SqlPreparedStatement, JsValue>;
+    pub fn prepare(this: &SqlStorage, query: &str) -> std::result::Result<SqlPreparedStatement, JsValue>;
 
     #[wasm_bindgen(method, catch)]
-    pub fn dump(this: &SqlStorage) -> Result<Vec<u8>, JsValue>;
+    pub fn dump(this: &SqlStorage) -> std::result::Result<Vec<u8>, JsValue>;
 
     #[wasm_bindgen(method, getter)]
     pub fn txn(this: &SqlStorage) -> Option<SqlTransaction>;
@@ -57,28 +59,28 @@ extern "C" {
     pub type SqlPreparedStatement;
 
     #[wasm_bindgen(method, catch)]
-    pub fn bind(this: &SqlPreparedStatement) -> Result<SqlStorageCursor, JsValue>;
+    pub fn bind(this: &SqlPreparedStatement) -> std::result::Result<SqlStorageCursor, JsValue>;
 
     #[wasm_bindgen(method, catch, variadic)]
-    pub fn bind_with_params(this: &SqlPreparedStatement, params: &Array) -> Result<SqlStorageCursor, JsValue>;
+    pub fn bind_with_params(this: &SqlPreparedStatement, params: &Array) -> std::result::Result<SqlStorageCursor, JsValue>;
 
     #[wasm_bindgen(method, catch)]
-    pub fn first(this: &SqlPreparedStatement) -> Result<Option<Object>, JsValue>;
+    pub fn first(this: &SqlPreparedStatement) -> std::result::Result<Option<Object>, JsValue>;
 
     #[wasm_bindgen(method, catch, variadic)]
-    pub fn first_with_params(this: &SqlPreparedStatement, params: &Array) -> Result<Option<Object>, JsValue>;
+    pub fn first_with_params(this: &SqlPreparedStatement, params: &Array) -> std::result::Result<Option<Object>, JsValue>;
 
     #[wasm_bindgen(method, catch)]
-    pub fn all(this: &SqlPreparedStatement) -> Result<SqlResults, JsValue>;
+    pub fn all(this: &SqlPreparedStatement) -> std::result::Result<SqlResults, JsValue>;
 
     #[wasm_bindgen(method, catch, variadic)]
-    pub fn all_with_params(this: &SqlPreparedStatement, params: &Array) -> Result<SqlResults, JsValue>;
+    pub fn all_with_params(this: &SqlPreparedStatement, params: &Array) -> std::result::Result<SqlResults, JsValue>;
 
     #[wasm_bindgen(method, catch)]
-    pub fn run(this: &SqlPreparedStatement) -> Result<SqlMeta, JsValue>;
+    pub fn run(this: &SqlPreparedStatement) -> std::result::Result<SqlMeta, JsValue>;
 
     #[wasm_bindgen(method, catch, variadic)]
-    pub fn run_with_params(this: &SqlPreparedStatement, params: &Array) -> Result<SqlMeta, JsValue>;
+    pub fn run_with_params(this: &SqlPreparedStatement, params: &Array) -> std::result::Result<SqlMeta, JsValue>;
 }
 
 // SqlResults for batch results
@@ -126,7 +128,7 @@ extern "C" {
     pub type SqlTransaction;
 
     #[wasm_bindgen(method, catch)]
-    pub fn rollback(this: &SqlTransaction) -> Result<(), JsValue>;
+    pub fn rollback(this: &SqlTransaction) -> std::result::Result<(), JsValue>;
 }
 
 // Extension traits to add SQL support to existing types
@@ -134,20 +136,48 @@ pub trait SqlStorageExt {
     fn sql(&self) -> Result<SqlStorage>;
 }
 
-// Extend the existing DurableObjectStorage to include SQL
-impl SqlStorageExt for worker::DurableObjectStorage {
+// Custom JS function to get SQL from Storage
+#[wasm_bindgen(inline_js = "
+export function get_storage_sql(storage) {
+    // First, try to get the inner DurableObjectStorage
+    if (storage && storage.inner) {
+        return storage.inner.sql;
+    }
+    // If that doesn't work, try direct access
+    if (storage && storage.sql) {
+        return storage.sql;
+    }
+    // Otherwise look through the prototype chain
+    let obj = storage;
+    while (obj) {
+        if (obj.sql) {
+            return obj.sql;
+        }
+        obj = Object.getPrototypeOf(obj);
+    }
+    return undefined;
+}
+")]
+extern "C" {
+    #[wasm_bindgen(js_name = get_storage_sql)]
+    fn get_storage_sql(storage: &JsValue) -> JsValue;
+}
+
+impl SqlStorageExt for Storage {
     fn sql(&self) -> Result<SqlStorage> {
-        // Get the underlying JS object and access the sql property
-        let js_obj = self.as_raw();
-        match Reflect::get(&js_obj, &JsValue::from_str("sql")) {
-            Ok(sql_value) => {
-                if sql_value.is_undefined() || sql_value.is_null() {
-                    Err(Error::RustError("SQL storage not available. Make sure this Durable Object uses SQLite backend".to_string()))
-                } else {
-                    Ok(sql_value.unchecked_into::<SqlStorage>())
-                }
+        unsafe {
+            // Convert Storage to JsValue
+            let storage_ptr: *const Storage = self;
+            let storage_js = JsValue::from(storage_ptr as u32);
+            
+            // Get the sql property
+            let sql_value = get_storage_sql(&storage_js);
+            
+            if sql_value.is_undefined() || sql_value.is_null() {
+                Err(Error::RustError("SQL storage not available. Make sure this Durable Object uses SQLite backend".to_string()))
+            } else {
+                Ok(sql_value.unchecked_into::<SqlStorage>())
             }
-            Err(e) => Err(Error::JsError(format!("Failed to access SQL storage: {:?}", e)))
         }
     }
 }
@@ -218,7 +248,7 @@ impl SqlStorage {
 #[macro_export]
 macro_rules! sql_query {
     ($storage:expr, $query:literal) => {
-        $storage.sql()?.exec($query)
+        $storage.sql()?.exec($query).map_err(|e| worker::Error::JsError(format!("{:?}", e)))
     };
     ($storage:expr, $query:literal, $($param:expr),*) => {
         $storage.sql()?.exec_many($query, &[$($param),*])

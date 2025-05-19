@@ -2,7 +2,7 @@ use worker::*;
 use worker::console_log;
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::utils::sql_bindings::{SqlStorageExt, SqlStorage};
+use crate::utils::sql_bindings::SqlStorageExt;
 use crate::sql_query;
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -66,7 +66,7 @@ impl ExampleSqliteDO {
     
     async fn get_recent_messages(&self, limit: u32) -> Result<Vec<Message>> {
         let storage = self.state.storage();
-        let sql = storage.sql()?;
+        let _sql = storage.sql()?;
         
         // Using the macro for convenience
         let cursor = sql_query!(storage, 
@@ -102,7 +102,7 @@ impl ExampleSqliteDO {
     async fn export_database(&self) -> Result<Vec<u8>> {
         let storage = self.state.storage();
         let sql = storage.sql()?;
-        sql.dump()
+        sql.dump().map_err(|e| Error::JsError(format!("Failed to dump database: {:?}", e)))
     }
     
     async fn get_statistics(&self) -> Result<serde_json::Value> {
@@ -142,7 +142,7 @@ impl DurableObject for ExampleSqliteDO {
         }
     }
     
-    async fn fetch(&mut self, req: Request) -> Result<Response> {
+    async fn fetch(&mut self, mut req: Request) -> Result<Response> {
         if !self.initialized {
             self.init_database().await?;
             self.initialized = true;
@@ -150,6 +150,20 @@ impl DurableObject for ExampleSqliteDO {
         
         let url = req.url()?;
         let path = url.path();
+        
+        // Parse query parameters from URL
+        let query_string = url.query().unwrap_or_default();
+        let query_params: std::collections::HashMap<String, String> = query_string
+            .split('&')
+            .filter(|s| !s.is_empty())
+            .filter_map(|pair| {
+                let mut parts = pair.split('=');
+                match (parts.next(), parts.next()) {
+                    (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
+                    _ => None,
+                }
+            })
+            .collect();
         
         match (req.method(), path) {
             (Method::Post, "/message") => {
@@ -159,14 +173,13 @@ impl DurableObject for ExampleSqliteDO {
                     user_id: String,
                 }
                 
-                let body: PostMessage = req.json().await?;
+                let body: PostMessage = req.json().await.map_err(|e| Error::RustError(format!("Failed to parse JSON: {}", e)))?;
                 let message = self.add_message(body.content, body.user_id).await?;
                 Response::from_json(&message)
             }
             
             (Method::Get, "/messages") => {
-                let limit = url.search_params()
-                    .get("limit")
+                let limit = query_params.get("limit")
                     .and_then(|l| l.parse().ok())
                     .unwrap_or(50);
                     
@@ -181,8 +194,7 @@ impl DurableObject for ExampleSqliteDO {
             }
             
             (Method::Delete, "/old") => {
-                let hours = url.search_params()
-                    .get("hours")
+                let hours = query_params.get("hours")
                     .and_then(|h| h.parse().ok())
                     .unwrap_or(24);
                     
