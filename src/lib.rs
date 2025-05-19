@@ -48,6 +48,7 @@ pub mod utils {
     pub mod turnstile;
     pub mod middleware;
     pub mod templates;
+    pub mod sql_bindings;
 }
 pub mod routes;
 

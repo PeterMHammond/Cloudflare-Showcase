@@ -23,6 +23,10 @@ class_name = "StudyDO"
 name = "SttDO"
 class_name = "SttDO"
 
+[[durable_objects.bindings]]
+name = "ExampleSqliteDO"
+class_name = "ExampleSqliteDO"
+
 [[migrations]]
 tag = "v1"
 new_classes = ["WebsocketDO"]
@@ -34,6 +38,10 @@ new_classes = ["StudyDO"]
 [[migrations]]
 tag = "v3"
 new_classes = ["SttDO"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["ExampleSqliteDO"]
 
 [ai]
 binding = "AI"
