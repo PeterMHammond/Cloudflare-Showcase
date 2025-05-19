@@ -265,51 +265,31 @@ impl ExampleSqliteDO {
     async fn export_database_file(&self) -> Result<Vec<u8>> {
         console_log!("Exporting database as SQLite file");
         let storage = self.state.storage();
-        let sql = storage.sql()?;
+        // We don't actually need to use SQL directly here, but we verify it's accessible
+        let _sql = storage.sql()?;
         
-        // Directly access the serialized database
-        // This is an internal API that might not be stable, but it's the most direct way
-        // to get the raw SQLite database file
+        // Since we can't directly access the raw SQLite database file in Cloudflare Workers,
+        // we'll create a custom format that contains the SQL dump with SQLite headers
         
-        // Use the SQL API to serialize the database
-        let serialized_db = match sql.exec("VACUUM INTO ?", &[JsValue::from_str(":memory:")]) {
-            Ok(_) => {
-                // This is a simplified approach - in a real-world scenario, we would
-                // use specific APIs to serialize the database if available
-                
-                // Since we can't directly serialize the database in Cloudflare Workers,
-                // we'll take a different approach - we'll use the SQL dump to recreate a minimal
-                // database in the proper format
-                
-                // First, get our SQL dump
-                let sql_dump = self.export_database().await?;
-                
-                // Our database file header - this is a simplified SQLite file header
-                // Full SQLite files are more complex, but this is enough for demonstration
-                let mut db_file = Vec::with_capacity(sql_dump.len() + 100);
-                
-                // Add SQLite header signature "SQLite format 3"
-                db_file.extend_from_slice(b"SQLite format 3\0");
-                
-                // Add the SQL dump as a comment section
-                db_file.extend_from_slice(b"\n-- BEGIN SQL DUMP\n");
-                db_file.extend_from_slice(&sql_dump);
-                db_file.extend_from_slice(b"\n-- END SQL DUMP\n");
-                
-                // Note: This is not a valid SQLite file that can be opened directly
-                // It's a custom format that contains the SQL dump
-                // A real implementation would require access to the actual SQLite serialization APIs
-                
-                console_log!("Created simplified database file: {} bytes", db_file.len());
-                db_file
-            },
-            Err(e) => {
-                console_log!("Failed to serialize database: {:?}", e);
-                return Err(Error::JsError(format!("Failed to export database file: {:?}", e)));
-            }
-        };
+        // First, get our SQL dump
+        let sql_dump = self.export_database().await?;
         
-        Ok(serialized_db)
+        // Our database file header - this is a simplified SQLite file header
+        // This is not a valid SQLite file that can be opened directly by SQLite tools
+        // Instead it's a custom format that contains the SQL dump with minimal SQLite signatures
+        let mut db_file = Vec::with_capacity(sql_dump.len() + 100);
+        
+        // Add SQLite header signature "SQLite format 3"
+        db_file.extend_from_slice(b"SQLite format 3\0");
+        
+        // Add the SQL dump as a comment section
+        db_file.extend_from_slice(b"\n-- BEGIN SQL DUMP\n");
+        db_file.extend_from_slice(&sql_dump);
+        db_file.extend_from_slice(b"\n-- END SQL DUMP\n");
+        
+        console_log!("Created database export file: {} bytes", db_file.len());
+        
+        Ok(db_file)
     }
     
     async fn get_statistics(&self) -> Result<serde_json::Value> {
