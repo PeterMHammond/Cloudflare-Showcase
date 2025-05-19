@@ -38,4 +38,5 @@ new_classes = ["SttDO"]
 [ai]
 binding = "AI"
 
-assets = { directory = "public" }
+[assets]
+directory = "static"

@@ -3,7 +3,6 @@ use utils::middleware::ValidationState;
 use routes::{
     about::handler as about,
     index::handler as index,
-    favicon::handler as favicon,
     websocket_do::handler as websocket_do,
     websocket::handler as websocket,
     study::handler as study,
@@ -49,7 +48,6 @@ pub mod utils {
 pub mod routes {
     pub mod about;
     pub mod index;
-    pub mod favicon;
     pub mod websocket;
     pub mod websocket_do;
     pub mod study;
@@ -71,7 +69,6 @@ async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
     
     let response = router
         .get_async("/", index)
-        .get_async("/favicon.ico", favicon)
         .get_async("/about", about)
         .get_async("/websocket_do", websocket_do)
         .get_async("/websocket", websocket)
