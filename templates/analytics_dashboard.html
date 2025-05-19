@@ -205,7 +205,7 @@
     document.getElementById('pages-trend').textContent = `${Math.round(summary.totalViews).toLocaleString()} total views`;
     
     document.getElementById('avg-load-time').textContent = `${Math.round(summary.avgLoadTime)} ms`;
-    document.getElementById('load-trend').textContent = `From Analytics Engine`;
+    document.getElementById('load-trend').textContent = `${isRealData() ? 'From Analytics Engine' : 'Simulated Data'}`;
     
     document.getElementById('avg-scroll-depth').textContent = `${Math.round(summary.avgScrollDepth)}%`;
     document.getElementById('scroll-trend').textContent = `Average across all pages`;
@@ -293,6 +293,15 @@
         }
       });
     });
+  }
+  
+  // Check if we have real data from Analytics Engine
+  function isRealData() {
+    // Check if any page has the dataSource field indicating simulation
+    if (!analyticsData.pages || !Array.isArray(analyticsData.pages) || analyticsData.pages.length === 0) {
+      return false;
+    }
+    return !analyticsData.pages[0].dataSource || !analyticsData.pages[0].dataSource.includes("Simulation");
   }
   
   // Initialize the dashboard
