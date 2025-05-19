@@ -1,112 +1,81 @@
 {% extends "base.html" %}
 
 {% block content %}
-<div class="h-full p-8">
-    <section class="border-b border-blue-200 mb-8 pb-8">
-        <h1 class="text-4xl font-bold text-gray-800 mb-4">{{ base.page_title }}</h1>
-        <p class="text-lg text-gray-600 max-w-3xl">
-            Experience the power of SQLite in Cloudflare Durable Objects. This demo showcases 
-            local, embedded SQL database capabilities with zero network latency - create, read, 
-            update, and delete messages stored in a real SQLite database running directly in 
-            your Durable Object.
-        </p>
-        <p class="text-sm text-blue-600 mt-4">
-            <strong>SQLite Features:</strong> ACID transactions, indexes, prepared statements, 
-            and full SQL syntax - all running at the edge!
-        </p>
-    </section>
-
-    <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <!-- Add Message Form -->
-        <section class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Add Message</h2>
-            <form id="addMessageForm" class="space-y-4">
-                <div>
-                    <label for="userId" class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
-                    <input type="text" 
-                           id="userId" 
-                           name="user_id" 
-                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                           placeholder="Enter your user ID" 
-                           required>
-                </div>
-                <div>
-                    <label for="content" class="block text-sm font-medium text-gray-700 mb-1">Message</label>
-                    <textarea id="content" 
-                              name="content" 
-                              rows="3" 
-                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                              placeholder="Enter your message" 
-                              required></textarea>
-                </div>
-                <button type="submit" 
-                        class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
-                    Add Message
-                </button>
-            </form>
+<div class="min-h-screen bg-gray-50 py-8 px-4">
+    <div class="max-w-7xl mx-auto">
+        <section class="mb-10 pb-8 border-b border-blue-200">
+            <h1 class="text-4xl font-bold text-gray-800 mb-2">{{ base.page_title }}</h1>
+            <p class="text-lg text-gray-600 max-w-3xl mb-2">
+                Experience the power of SQLite in Cloudflare Durable Objects. This demo showcases local, embedded SQL database capabilities with zero network latency - create, read, update, and delete messages stored in a real SQLite database running directly in your Durable Object.
+            </p>
+            <p class="text-sm text-blue-600 mt-2">
+                <strong>SQLite Features:</strong> ACID transactions, indexes, prepared statements, and full SQL syntax - all running at the edge!
+            </p>
         </section>
-
-        <!-- Database Stats -->
-        <section class="bg-white rounded-lg shadow-md p-6">
-            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Database Statistics</h2>
-            <div id="dbStats" class="space-y-3">
-                <div class="p-3 bg-gray-50 rounded">
-                    <span class="text-gray-600">Loading statistics...</span>
+        <main class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 items-start w-full">
+            <!-- Add Message Card -->
+            <section class="bg-white rounded-2xl shadow-lg p-6 flex flex-col justify-center border border-gray-200 min-h-[420px] w-full min-w-0">
+                <h2 class="text-xl font-semibold text-gray-800 mb-3">Add Message</h2>
+                <form id="addMessageForm" class="space-y-3 w-full">
+                    <div>
+                        <label for="userId" class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                        <input type="text" id="userId" name="user_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50" placeholder="Enter your user ID" required>
+                    </div>
+                    <div>
+                        <label for="content" class="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                        <textarea id="content" name="content" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50" placeholder="Enter your message" required></textarea>
+                    </div>
+                    <div class="pt-1 flex justify-center w-full">
+                        <button type="submit" class="px-6 py-2 bg-blue-600 text-white rounded-full font-semibold shadow hover:bg-blue-700 transition-colors text-base w-full sm:w-auto">Add Message</button>
+                    </div>
+                </form>
+            </section>
+            <!-- Database Stats Card -->
+            <section class="bg-white rounded-2xl shadow-lg p-6 border border-gray-200 flex flex-col items-center min-h-[420px] w-full min-w-0">
+                <h2 class="text-xl font-semibold text-gray-800 mb-4">Database Statistics</h2>
+                <ul id="dbStats" class="w-full max-w-xs mx-auto flex flex-col mb-8 text-base">
+                    <li class="flex justify-between items-center w-full">
+                        <span class="text-gray-500 text-right w-24">Messages:</span>
+                        <span class="font-bold text-gray-800 text-left flex-1 ml-4" id="statMessagesValue">-</span>
+                    </li>
+                    <li class="flex justify-between items-center w-full">
+                        <span class="text-gray-500 text-right w-24">Users:</span>
+                        <span class="font-bold text-gray-800 text-left flex-1 ml-4" id="statUsersValue">-</span>
+                    </li>
+                    <li class="flex justify-between items-center w-full">
+                        <span class="text-gray-500 text-right w-24">Created:</span>
+                        <span class="font-bold text-gray-800 text-left flex-1 ml-4" id="statCreatedValue">-</span>
+                    </li>
+                </ul>
+                <div class="border-t border-gray-100 w-full mb-4"></div>
+                <div class="flex flex-row flex-wrap gap-3 w-full justify-center">
+                    <button onclick="loadStats()" class="px-5 py-2 bg-green-600 text-white rounded-full font-medium shadow-sm hover:bg-green-700 transition-colors text-sm w-full sm:w-auto">Refresh</button>
+                    <button onclick="exportDatabase()" class="px-5 py-2 bg-purple-600 text-white rounded-full font-medium shadow-sm hover:bg-purple-700 transition-colors text-sm w-full sm:w-auto">Export</button>
+                    <button onclick="deleteOldMessages()" class="px-5 py-2 bg-red-600 text-white rounded-full font-medium shadow-sm hover:bg-red-700 transition-colors text-sm w-full sm:w-auto">Delete</button>
                 </div>
-            </div>
-            <div class="mt-6 space-y-3">
-                <button onclick="loadStats()" 
-                        class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors">
-                    Refresh Stats
-                </button>
-                <div class="relative">
-                    <button onclick="exportDatabase()" 
-                            class="w-full bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition-colors">
-                        Export SQL Script
-                    </button>
-                    <div class="text-xs text-gray-600 mt-1">
-                        SQL script - works with any SQLite tool
+            </section>
+            <!-- Recent Messages Card -->
+            <section class="bg-white rounded-2xl shadow-lg p-6 border border-gray-200 flex flex-col min-h-[420px] w-full min-w-0">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-3 gap-2">
+                    <h2 class="text-xl font-semibold text-gray-800">Recent Messages</h2>
+                    <div class="flex gap-2 items-center w-full sm:w-auto">
+                        <input type="text" id="userFilter" placeholder="Filter by user ID" class="px-2 py-1 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-gray-50 w-full sm:w-32">
+                        <button onclick="filterMessages()" class="bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium shadow w-full sm:w-auto">Filter</button>
+                        <button onclick="loadMessages()" class="bg-gray-600 text-white px-3 py-1 rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium shadow w-full sm:w-auto">Refresh</button>
                     </div>
                 </div>
-                <button onclick="deleteOldMessages()" 
-                        class="w-full bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition-colors">
-                    Delete Messages
-                </button>
+                <div id="messagesList" class="space-y-2 max-h-96 overflow-y-auto pr-1 w-full">
+                    <div class="text-center text-gray-500 py-8">Loading messages...</div>
+                </div>
+            </section>
+        </main>
+        <section class="mt-10 bg-gray-900 rounded-2xl shadow-lg p-8 border border-gray-800">
+            <h3 class="text-lg font-semibold text-white mb-4">SQL Operations Log</h3>
+            <div id="sqlLog" class="font-mono text-sm text-green-400 space-y-1 max-h-56 overflow-y-auto bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div>[<span class="text-gray-400">Ready</span>] SQLite Durable Object initialized...</div>
             </div>
         </section>
-    </main>
-
-    <!-- Messages List -->
-    <section class="mt-8 bg-white rounded-lg shadow-md p-6">
-        <div class="flex justify-between items-center mb-4">
-            <h2 class="text-2xl font-semibold text-gray-800">Recent Messages</h2>
-            <div class="flex gap-2">
-                <input type="text" 
-                       id="userFilter" 
-                       placeholder="Filter by user ID" 
-                       class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                <button onclick="filterMessages()" 
-                        class="bg-blue-500 text-white px-4 py-1 rounded-md hover:bg-blue-600 transition-colors text-sm">
-                    Filter
-                </button>
-                <button onclick="loadMessages()" 
-                        class="bg-gray-500 text-white px-4 py-1 rounded-md hover:bg-gray-600 transition-colors text-sm">
-                    Refresh
-                </button>
-            </div>
-        </div>
-        <div id="messagesList" class="space-y-3 max-h-96 overflow-y-auto">
-            <div class="text-center text-gray-500 py-8">Loading messages...</div>
-        </div>
-    </section>
-
-    <!-- SQL Debug Log -->
-    <section class="mt-8 bg-gray-900 rounded-lg shadow-md p-6">
-        <h3 class="text-xl font-semibold text-white mb-4">SQL Operations Log</h3>
-        <div id="sqlLog" class="font-mono text-sm text-green-400 space-y-1 max-h-64 overflow-y-auto">
-            <div>[<span class="text-gray-400">Ready</span>] SQLite Durable Object initialized...</div>
-        </div>
-    </section>
+    </div>
 </div>
 
 <script>
@@ -138,12 +107,15 @@ async function loadMessages(userId = null) {
         }
         
         messagesList.innerHTML = messages.map(msg => `
-            <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div class="flex justify-between items-start mb-2">
-                    <span class="font-medium text-gray-800">${msg.user_id}</span>
-                    <span class="text-sm text-gray-500">${new Date(msg.timestamp).toLocaleString()}</span>
+            <div class="flex items-start gap-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-lg">${msg.user_id[0] || '?'}</div>
+                <div class="flex-1">
+                    <div class="flex justify-between items-center mb-1">
+                        <span class="font-medium text-gray-800">${msg.user_id}</span>
+                        <span class="text-xs text-gray-500">${new Date(msg.timestamp).toLocaleString()}</span>
+                    </div>
+                    <p class="text-gray-700">${msg.content}</p>
                 </div>
-                <p class="text-gray-700">${msg.content}</p>
             </div>
         `).join('');
         
@@ -164,27 +136,9 @@ async function loadStats() {
             throw new Error(error);
         }
         const stats = await response.json();
-        
-        const dbStats = document.getElementById('dbStats');
-        dbStats.innerHTML = `
-            <div class="p-3 bg-gray-50 rounded">
-                <div class="text-sm text-gray-600">Total Messages</div>
-                <div class="text-2xl font-bold text-gray-800">${stats.total_messages || 0}</div>
-            </div>
-            <div class="p-3 bg-gray-50 rounded">
-                <div class="text-sm text-gray-600">Unique Users</div>
-                <div class="text-2xl font-bold text-gray-800">${stats.unique_users || 0}</div>
-            </div>
-            <div class="p-3 bg-gray-50 rounded">
-                <div class="text-sm text-gray-600">Database Age</div>
-                <div class="text-sm font-medium text-gray-800">
-                    ${stats.first_message_time ? 
-                        `Since ${new Date(stats.first_message_time).toLocaleDateString()}` : 
-                        'No data yet'}
-                </div>
-            </div>
-        `;
-        
+        document.getElementById('statMessagesValue').textContent = stats.total_messages || 0;
+        document.getElementById('statUsersValue').textContent = stats.unique_users || 0;
+        document.getElementById('statCreatedValue').textContent = stats.first_message_time ? new Date(stats.first_message_time).toLocaleString() : 'No data yet';
         logSQL('SELECT', 'Statistics loaded successfully');
     } catch (error) {
         console.error('Error loading stats:', error);
@@ -192,16 +146,13 @@ async function loadStats() {
     }
 }
 
-// Add message form handler
 document.getElementById('addMessageForm').addEventListener('submit', async (e) => {
     e.preventDefault();
-    
     const formData = new FormData(e.target);
     const data = {
         user_id: formData.get('user_id'),
         content: formData.get('content')
     };
-    
     try {
         logSQL('INSERT', `Adding message from user: ${data.user_id}`);
         const response = await fetch(`${API_BASE}/message`, {
@@ -209,7 +160,6 @@ document.getElementById('addMessageForm').addEventListener('submit', async (e) =
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(data)
         });
-        
         if (response.ok) {
             logSQL('INSERT', 'Message added successfully');
             e.target.reset();
@@ -224,7 +174,6 @@ document.getElementById('addMessageForm').addEventListener('submit', async (e) =
     }
 });
 
-// Filter messages by user
 function filterMessages() {
     const userId = document.getElementById('userFilter').value.trim();
     if (userId) {
@@ -234,16 +183,13 @@ function filterMessages() {
     }
 }
 
-// Delete all messages
 async function deleteOldMessages() {
     if (!confirm('Delete all messages?')) return;
-    
     try {
         logSQL('DELETE', 'Deleting all messages');
         const response = await fetch(`${API_BASE}/messages`, {
             method: 'DELETE'
         });
-        
         const result = await response.json();
         logSQL('DELETE', `Deleted ${result.deleted} messages`);
         loadMessages();
@@ -254,20 +200,16 @@ async function deleteOldMessages() {
     }
 }
 
-// Export database as SQL script
 async function exportDatabase() {
     try {
         logSQL('DUMP', 'Exporting SQLite database as SQL script');
         const response = await fetch(`${API_BASE}/export`);
-        
         if (!response.ok) {
             const error = await response.text();
             throw new Error(`Export failed: ${error}`);
         }
-        
         const blob = await response.blob();
         logSQL('DUMP', `Export received: ${blob.size} bytes`);
-        
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
@@ -275,7 +217,6 @@ async function exportDatabase() {
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
-        
         logSQL('DUMP', 'SQL script exported successfully');
     } catch (error) {
         console.error('Error exporting SQL script:', error);
@@ -283,8 +224,6 @@ async function exportDatabase() {
     }
 }
 
-
-// Initialize
 loadMessages();
 loadStats();
 </script>
