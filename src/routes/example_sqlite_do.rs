@@ -267,30 +267,50 @@ impl ExampleSqliteDO {
         let storage = self.state.storage();
         let sql = storage.sql()?;
         
-        // Use the built-in dump method to get the actual SQLite database file
-        match sql.dump() {
-            Ok(db_file) => {
-                console_log!("Successfully dumped SQLite database, size: {} bytes", db_file.len());
-                Ok(db_file)
-            },
-            Err(e) => {
-                console_log!("Failed to dump SQLite database: {:?}", e);
-                
-                // Fallback to our SQL dump approach if the dump method fails
-                console_log!("Falling back to SQL export with SQLite header");
-                let sql_dump = self.export_database().await?;
-                
-                // Create a file that has the SQLite signature but contains our SQL dump
-                let mut db_file = Vec::with_capacity(sql_dump.len() + 100);
-                db_file.extend_from_slice(b"SQLite format 3\0");
-                db_file.extend_from_slice(b"\n-- BEGIN SQL DUMP\n");
-                db_file.extend_from_slice(&sql_dump);
-                db_file.extend_from_slice(b"\n-- END SQL DUMP\n");
-                
-                console_log!("Created fallback database file: {} bytes", db_file.len());
-                Ok(db_file)
-            }
-        }
+        // Unfortunately, Cloudflare Durable Objects don't provide a way to directly 
+        // export the SQLite database file. Instead, we'll create a properly formatted
+        // SQL script that can be easily imported into any SQLite tool.
+        
+        // Get our SQL script with schema and data
+        let sql_dump = self.export_database().await?;
+        
+        // The better approach is to use a well-formatted SQL script
+        // that can be easily imported into any SQLite tool
+        // Format the SQL dump as a properly structured SQLite script
+        // with transaction wrapping for atomicity
+        
+        let mut enhanced_sql = String::with_capacity(sql_dump.len() + 500);
+        
+        // Add a header with information and instructions
+        enhanced_sql.push_str("-- SQLite database export from Cloudflare Durable Object\n");
+        enhanced_sql.push_str("-- Generated: ");
+        enhanced_sql.push_str(&format!("{}\n", Date::now()));
+        enhanced_sql.push_str("-- \n");
+        enhanced_sql.push_str("-- HOW TO USE THIS FILE:\n");
+        enhanced_sql.push_str("-- 1. Create a new SQLite database in your tool of choice\n");
+        enhanced_sql.push_str("-- 2. Import/execute this SQL file\n");
+        enhanced_sql.push_str("-- 3. All tables, indexes, and data will be imported\n");
+        enhanced_sql.push_str("-- \n\n");
+        
+        // Begin transaction for atomicity
+        enhanced_sql.push_str("BEGIN TRANSACTION;\n\n");
+        
+        // Add the SQLite pragmas for compatibility
+        enhanced_sql.push_str("PRAGMA foreign_keys=OFF;\n");
+        enhanced_sql.push_str("PRAGMA journal_mode=DELETE;\n");
+        enhanced_sql.push_str("PRAGMA synchronous=OFF;\n\n");
+        
+        // Add the actual SQL dump (schema and data)
+        enhanced_sql.push_str(&String::from_utf8_lossy(&sql_dump));
+        
+        // End transaction
+        enhanced_sql.push_str("\n\nCOMMIT;\n");
+        
+        // Add vacuum to optimize the database
+        enhanced_sql.push_str("VACUUM;\n");
+        
+        console_log!("Created enhanced SQL file for import: {} bytes", enhanced_sql.len());
+        Ok(enhanced_sql.into_bytes())
     }
     
     async fn get_statistics(&self) -> Result<serde_json::Value> {
@@ -489,8 +509,8 @@ impl DurableObject for ExampleSqliteDO {
             (Method::Get, "/export-file") => {
                 let db_file = self.export_database_file().await?;
                 let mut response = Response::from_bytes(db_file)?;
-                response.headers_mut().set("Content-Type", "application/x-sqlite3")?;
-                response.headers_mut().set("Content-Disposition", "attachment; filename=\"database.db\"")?;
+                response.headers_mut().set("Content-Type", "application/sql")?;
+                response.headers_mut().set("Content-Disposition", "attachment; filename=\"database_import.sql\"")?;
                 Ok(response)
             }
             

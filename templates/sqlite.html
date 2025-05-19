@@ -71,10 +71,10 @@
                 <div class="relative">
                     <button onclick="exportDatabaseFile()" 
                             class="w-full bg-indigo-500 text-white py-2 px-4 rounded-md hover:bg-indigo-600 transition-colors">
-                        Export SQLite DB
+                        Export Enhanced SQL
                     </button>
                     <div class="text-xs text-gray-600 mt-1">
-                        Binary SQLite database file - open directly with SQLite tools
+                        Optimized SQL import script with transaction support - easy to import
                     </div>
                 </div>
                 <button onclick="deleteOldMessages()" 
@@ -292,10 +292,10 @@ async function exportDatabase() {
     }
 }
 
-// Export database as SQLite file
+// Export enhanced SQL file with transaction support
 async function exportDatabaseFile() {
     try {
-        logSQL('DUMP', 'Exporting SQLite database as DB file');
+        logSQL('DUMP', 'Exporting enhanced SQL with transaction support');
         const response = await fetch(`${API_BASE}/export-file`);
         
         if (!response.ok) {
@@ -304,20 +304,20 @@ async function exportDatabaseFile() {
         }
         
         const blob = await response.blob();
-        logSQL('DUMP', `DB file received: ${blob.size} bytes`);
+        logSQL('DUMP', `Enhanced SQL received: ${blob.size} bytes`);
         
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `sqlite-database-${Date.now()}.db`;
+        a.download = `sqlite-import-${Date.now()}.sql`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
         
-        logSQL('DUMP', 'Database file exported successfully');
+        logSQL('DUMP', 'Enhanced SQL file exported successfully');
     } catch (error) {
-        console.error('Error exporting database file:', error);
-        logSQL('ERROR', `DB file export failed: ${error.message}`);
+        console.error('Error exporting SQL file:', error);
+        logSQL('ERROR', `Enhanced SQL export failed: ${error.message}`);
     }
 }
 
