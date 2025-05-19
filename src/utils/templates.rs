@@ -17,6 +17,7 @@ static TEMPLATES: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     // Page templates
     templates.insert("index.html", include_str!("../../templates/index.html"));
     templates.insert("about.html", include_str!("../../templates/about.html"));
+    templates.insert("analytics.html", include_str!("../../templates/analytics.html"));
     templates.insert("openai.html", include_str!("../../templates/openai.html"));
     templates.insert("stt.html", include_str!("../../templates/stt.html"));
     templates.insert("study.html", include_str!("../../templates/study.html"));

@@ -1,0 +1,269 @@
+{% extends "base.html" %} {% block content %}
+<section class="h-full p-8 flex flex-col overflow-hidden">
+  <!-- Header Section -->
+  <article class="bg-white rounded-lg shadow-sm mb-4 p-4">
+    <h1 class="text-2xl font-bold text-gray-800">
+      Analytics Engine Dashboard
+    </h1>
+    <p class="text-gray-600 max-w-2xl">
+      This demo showcases Cloudflare's Analytics Engine integration with Rust Workers.
+      Track page load time, time on page, and user interactions with high-cardinality serverless analytics.
+      <span class="text-blue-600 font-medium">Your session ID: {{ session_id }}</span>
+    </p>
+  </article>
+
+  <!-- Analytics Display Section -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <!-- Page Load Time Card -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h3 class="text-lg font-medium text-gray-800 mb-2">Page Load Time</h3>
+      <div id="load-time-display" class="text-3xl font-bold text-blue-600">
+        -- ms
+      </div>
+      <p class="text-sm text-gray-500 mt-1">Time to fully load this page</p>
+    </div>
+
+    <!-- Time on Page Card -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h3 class="text-lg font-medium text-gray-800 mb-2">Time on Page</h3>
+      <div id="time-on-page" class="text-3xl font-bold text-green-600">
+        0:00
+      </div>
+      <p class="text-sm text-gray-500 mt-1">How long you've been on this page</p>
+    </div>
+
+    <!-- Data Points Recorded Card -->
+    <div class="bg-white p-4 rounded-lg shadow">
+      <h3 class="text-lg font-medium text-gray-800 mb-2">Data Points Recorded</h3>
+      <div id="data-points-count" class="text-3xl font-bold text-purple-600">
+        1
+      </div>
+      <p class="text-sm text-gray-500 mt-1">Analytics data points sent to Cloudflare</p>
+    </div>
+  </div>
+
+  <!-- Performance Metrics Table -->
+  <div class="bg-white p-4 rounded-lg shadow mb-4">
+    <h3 class="text-lg font-medium text-gray-800 mb-2">
+      Detailed Performance Metrics
+    </h3>
+    <div class="overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead>
+          <tr>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Metric
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Value
+            </th>
+            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              Description
+            </th>
+          </tr>
+        </thead>
+        <tbody id="metrics-table" class="bg-white divide-y divide-gray-200">
+          <!-- Metrics will be populated by JavaScript -->
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Analytics Engine Information Section -->
+  <div class="bg-white p-4 rounded-lg shadow mb-4">
+    <h3 class="text-lg font-medium text-gray-800 mb-2">Analytics Engine Tracking</h3>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div>
+        <h4 class="text-md font-medium text-gray-700 mb-2">What's Being Tracked</h4>
+        <ul class="list-disc pl-5 space-y-1 text-sm">
+          <li><strong>Page Views:</strong> URL, User Agent, Load Time</li>
+          <li><strong>Time on Page:</strong> Session duration tracked in intervals</li>
+          <li><strong>User Interactions:</strong> Clicks, scrolls, and keypresses</li>
+        </ul>
+      </div>
+      <div>
+        <h4 class="text-md font-medium text-gray-700 mb-2">Data Structure</h4>
+        <div class="bg-gray-50 p-3 rounded border font-mono text-xs whitespace-pre">
+{
+  "blobs": ["page_view", "/analytics", "Chrome..."],
+  "doubles": [125.3],
+  "indexes": ["{{ session_id }}"]
+}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Real-time Updates Section -->
+  <div class="bg-white p-4 rounded-lg shadow">
+    <h3 class="text-lg font-medium text-gray-800 mb-2">Analytics Activity Log</h3>
+    <div id="activity-log" class="h-64 overflow-y-auto bg-gray-50 p-3 rounded border font-mono text-xs">
+      <div class="text-sm text-gray-500">Initializing Analytics Engine tracking...</div>
+    </div>
+  </div>
+</section>
+
+<script>
+  // Store session ID from server
+  const sessionId = "{{ session_id }}";
+  
+  // Track total data points sent
+  let dataPointsSent = 1; // Initial page view is already sent from the server
+  
+  // Function to update the data points counter
+  function updateDataPointsCounter() {
+    document.getElementById('data-points-count').textContent = dataPointsSent.toString();
+  }
+  
+  // Function to send analytics data to Analytics Engine
+  async function sendAnalyticsData(eventType, data) {
+    try {
+      const response = await fetch('/analytics/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          event_type: eventType,
+          data: data
+        })
+      });
+      
+      if (response.ok) {
+        dataPointsSent++;
+        updateDataPointsCounter();
+        logActivity(`Analytics data point sent: ${eventType}`);
+        return true;
+      } else {
+        logActivity(`Error sending analytics: ${response.status}`);
+        return false;
+      }
+    } catch (e) {
+      logActivity(`Exception sending analytics: ${e.message}`);
+      return false;
+    }
+  }
+  
+  // Log activity to the activity log
+  function logActivity(message) {
+    const logElement = document.getElementById('activity-log');
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = document.createElement('div');
+    logEntry.className = 'mb-1';
+    logEntry.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> ${message}`;
+    
+    logElement.appendChild(logEntry);
+    logElement.scrollTop = logElement.scrollHeight;
+  }
+  
+  // Page load time measurement
+  document.addEventListener('DOMContentLoaded', () => {
+    // Calculate and display page load time
+    setTimeout(async () => {
+      const pageLoadTime = window.performance.timing.domContentLoadedEventEnd - 
+                          window.performance.timing.navigationStart;
+      document.getElementById('load-time-display').textContent = `${pageLoadTime} ms`;
+
+      // Send the page load time to Analytics Engine
+      await sendAnalyticsData('page_load', {
+        load_time_ms: pageLoadTime
+      });
+
+      // Populate metrics table
+      const metrics = [
+        { name: 'DNS Lookup', 
+          value: `${window.performance.timing.domainLookupEnd - window.performance.timing.domainLookupStart} ms`,
+          description: 'Time spent resolving the domain name' },
+        { name: 'TCP Connection', 
+          value: `${window.performance.timing.connectEnd - window.performance.timing.connectStart} ms`,
+          description: 'Time spent establishing TCP connection' },
+        { name: 'Request Time', 
+          value: `${window.performance.timing.responseStart - window.performance.timing.requestStart} ms`,
+          description: 'Time from request start until first byte received' },
+        { name: 'Response Time', 
+          value: `${window.performance.timing.responseEnd - window.performance.timing.responseStart} ms`,
+          description: 'Time spent receiving the response' },
+        { name: 'DOM Processing', 
+          value: `${window.performance.timing.domComplete - window.performance.timing.domLoading} ms`,
+          description: 'Time spent processing the DOM tree' },
+        { name: 'Page Rendering', 
+          value: `${window.performance.timing.loadEventEnd - window.performance.timing.domComplete} ms`,
+          description: 'Time spent rendering the page' }
+      ];
+
+      const metricsTable = document.getElementById('metrics-table');
+      metrics.forEach(metric => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${metric.name}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-bold">${metric.value}</td>
+          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${metric.description}</td>
+        `;
+        metricsTable.appendChild(row);
+      });
+
+      // Log the page load event
+      logActivity('Page fully loaded and analytics recorded');
+    }, 0);
+
+    // Start tracking time on page
+    let seconds = 0;
+    const timeInterval = setInterval(async () => {
+      seconds++;
+      const minutes = Math.floor(seconds / 60);
+      const remainingSeconds = seconds % 60;
+      document.getElementById('time-on-page').textContent = 
+        `${minutes}:${remainingSeconds < 10 ? '0' : ''}${remainingSeconds}`;
+      
+      // Send time on page updates every 30 seconds
+      if (seconds % 30 === 0) {
+        await sendAnalyticsData('time_on_page', {
+          seconds: seconds
+        });
+      }
+    }, 1000);
+
+    // Track user interactions
+    const interactions = {
+      clicks: 0,
+      scrolls: 0,
+      keypress: 0
+    };
+    
+    // Set up throttled event handlers to avoid too many data points
+    let lastInteractionTime = Date.now();
+    
+    ['click', 'scroll', 'keypress'].forEach(eventType => {
+      document.addEventListener(eventType, async () => {
+        // Update interaction counts
+        interactions[eventType]++;
+        
+        // Log the interaction
+        logActivity(`User ${eventType} detected (total: ${interactions[eventType]})`);
+        
+        // Only send analytics at most once every 5 seconds
+        const now = Date.now();
+        if (now - lastInteractionTime > 5000) {
+          lastInteractionTime = now;
+          await sendAnalyticsData('interaction', {
+            type: eventType,
+            counts: interactions
+          });
+        }
+      });
+    });
+    
+    // Handle page unload to record final analytics
+    window.addEventListener('beforeunload', async () => {
+      // Send final time on page
+      await sendAnalyticsData('time_on_page', {
+        seconds: seconds,
+        final: true
+      });
+      
+      // Clear interval
+      clearInterval(timeInterval);
+    });
+  });
+</script>
+{% endblock %}

@@ -15,7 +15,7 @@ impl Default for ValidationState {
     }
 }
 
-pub async fn validate_turnstile(req: Request, env: &Env, _ctx: &Context) -> Result<(Request, ValidationState)> {
+pub async fn validate_turnstile(req: Request, env: &worker::Env, _ctx: &Context) -> Result<(Request, ValidationState)> {
     let mut state = ValidationState::default();
     
     state.validation_message = match req.headers().get("Cookie")? {

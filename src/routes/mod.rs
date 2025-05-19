@@ -1,4 +1,5 @@
 pub mod about;
+pub mod analytics;
 pub mod index;
 pub mod websocket;
 pub mod websocket_do;

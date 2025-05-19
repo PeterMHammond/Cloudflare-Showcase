@@ -48,3 +48,7 @@ binding = "AI"
 
 [assets]
 directory = "static"
+
+[[analytics_engine_datasets]]
+binding = "ANALYTICS"
+dataset = "showcase_analytics"
