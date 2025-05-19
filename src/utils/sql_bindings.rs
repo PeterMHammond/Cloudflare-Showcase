@@ -1,7 +1,7 @@
 use worker::{Error, Storage, wasm_bindgen, js_sys};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use js_sys::{Array, Object, Reflect};
+use js_sys::{Array, Object};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -165,19 +165,17 @@ extern "C" {
 
 impl SqlStorageExt for Storage {
     fn sql(&self) -> Result<SqlStorage> {
-        unsafe {
             // Convert Storage to JsValue
-            let storage_ptr: *const Storage = self;
-            let storage_js = JsValue::from(storage_ptr as u32);
-            
-            // Get the sql property
-            let sql_value = get_storage_sql(&storage_js);
-            
-            if sql_value.is_undefined() || sql_value.is_null() {
-                Err(Error::RustError("SQL storage not available. Make sure this Durable Object uses SQLite backend".to_string()))
-            } else {
-                Ok(sql_value.unchecked_into::<SqlStorage>())
-            }
+        let storage_ptr: *const Storage = self;
+        let storage_js = JsValue::from(storage_ptr as u32);
+        
+        // Get the sql property
+        let sql_value = get_storage_sql(&storage_js);
+        
+        if sql_value.is_undefined() || sql_value.is_null() {
+            Err(Error::RustError("SQL storage not available. Make sure this Durable Object uses SQLite backend".to_string()))
+        } else {
+            Ok(sql_value.unchecked_into::<SqlStorage>())
         }
     }
 }

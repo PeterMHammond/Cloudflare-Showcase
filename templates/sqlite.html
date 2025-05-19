@@ -1,0 +1,274 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="h-full p-8">
+    <section class="border-b border-blue-200 mb-8 pb-8">
+        <h1 class="text-4xl font-bold text-gray-800 mb-4">{{ base.page_title }}</h1>
+        <p class="text-lg text-gray-600 max-w-3xl">
+            Experience the power of SQLite in Cloudflare Durable Objects. This demo showcases 
+            local, embedded SQL database capabilities with zero network latency - create, read, 
+            update, and delete messages stored in a real SQLite database running directly in 
+            your Durable Object.
+        </p>
+        <p class="text-sm text-blue-600 mt-4">
+            <strong>SQLite Features:</strong> ACID transactions, indexes, prepared statements, 
+            and full SQL syntax - all running at the edge!
+        </p>
+    </section>
+
+    <main class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Add Message Form -->
+        <section class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Add Message</h2>
+            <form id="addMessageForm" class="space-y-4">
+                <div>
+                    <label for="userId" class="block text-sm font-medium text-gray-700 mb-1">User ID</label>
+                    <input type="text" 
+                           id="userId" 
+                           name="user_id" 
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="Enter your user ID" 
+                           required>
+                </div>
+                <div>
+                    <label for="content" class="block text-sm font-medium text-gray-700 mb-1">Message</label>
+                    <textarea id="content" 
+                              name="content" 
+                              rows="3" 
+                              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              placeholder="Enter your message" 
+                              required></textarea>
+                </div>
+                <button type="submit" 
+                        class="w-full bg-blue-500 text-white py-2 px-4 rounded-md hover:bg-blue-600 transition-colors">
+                    Add Message
+                </button>
+            </form>
+        </section>
+
+        <!-- Database Stats -->
+        <section class="bg-white rounded-lg shadow-md p-6">
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Database Statistics</h2>
+            <div id="dbStats" class="space-y-3">
+                <div class="p-3 bg-gray-50 rounded">
+                    <span class="text-gray-600">Loading statistics...</span>
+                </div>
+            </div>
+            <div class="mt-6 space-y-3">
+                <button onclick="loadStats()" 
+                        class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors">
+                    Refresh Stats
+                </button>
+                <button onclick="exportDatabase()" 
+                        class="w-full bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition-colors">
+                    Export Database
+                </button>
+                <button onclick="deleteOldMessages()" 
+                        class="w-full bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition-colors">
+                    Delete Old Messages (24h)
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Messages List -->
+    <section class="mt-8 bg-white rounded-lg shadow-md p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-semibold text-gray-800">Recent Messages</h2>
+            <div class="flex gap-2">
+                <input type="text" 
+                       id="userFilter" 
+                       placeholder="Filter by user ID" 
+                       class="px-3 py-1 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="filterMessages()" 
+                        class="bg-blue-500 text-white px-4 py-1 rounded-md hover:bg-blue-600 transition-colors text-sm">
+                    Filter
+                </button>
+                <button onclick="loadMessages()" 
+                        class="bg-gray-500 text-white px-4 py-1 rounded-md hover:bg-gray-600 transition-colors text-sm">
+                    Refresh
+                </button>
+            </div>
+        </div>
+        <div id="messagesList" class="space-y-3 max-h-96 overflow-y-auto">
+            <div class="text-center text-gray-500 py-8">Loading messages...</div>
+        </div>
+    </section>
+
+    <!-- SQL Debug Log -->
+    <section class="mt-8 bg-gray-900 rounded-lg shadow-md p-6">
+        <h3 class="text-xl font-semibold text-white mb-4">SQL Operations Log</h3>
+        <div id="sqlLog" class="font-mono text-sm text-green-400 space-y-1 max-h-64 overflow-y-auto">
+            <div>[<span class="text-gray-400">Ready</span>] SQLite Durable Object initialized...</div>
+        </div>
+    </section>
+</div>
+
+<script>
+const API_BASE = '/sqlite/api';
+
+// Log SQL operations
+function logSQL(operation, details) {
+    const log = document.getElementById('sqlLog');
+    const timestamp = new Date().toLocaleTimeString();
+    const entry = document.createElement('div');
+    entry.innerHTML = `[<span class="text-gray-400">${timestamp}</span>] <span class="text-yellow-400">${operation}</span>: ${details}`;
+    log.appendChild(entry);
+    log.scrollTop = log.scrollHeight;
+}
+
+// Load messages
+async function loadMessages(userId = null) {
+    try {
+        const url = userId ? `${API_BASE}/user/${userId}` : `${API_BASE}/messages`;
+        logSQL('SELECT', userId ? `Loading messages for user: ${userId}` : 'Loading all recent messages');
+        
+        const response = await fetch(url);
+        const messages = await response.json();
+        
+        const messagesList = document.getElementById('messagesList');
+        if (messages.length === 0) {
+            messagesList.innerHTML = '<div class="text-center text-gray-500 py-8">No messages found</div>';
+            return;
+        }
+        
+        messagesList.innerHTML = messages.map(msg => `
+            <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="font-medium text-gray-800">${msg.user_id}</span>
+                    <span class="text-sm text-gray-500">${new Date(msg.timestamp).toLocaleString()}</span>
+                </div>
+                <p class="text-gray-700">${msg.content}</p>
+            </div>
+        `).join('');
+        
+        logSQL('SELECT', `Retrieved ${messages.length} messages`);
+    } catch (error) {
+        console.error('Error loading messages:', error);
+        logSQL('ERROR', error.message);
+    }
+}
+
+// Load database statistics
+async function loadStats() {
+    try {
+        logSQL('SELECT', 'Querying database statistics');
+        const response = await fetch(`${API_BASE}/stats`);
+        const stats = await response.json();
+        
+        const dbStats = document.getElementById('dbStats');
+        dbStats.innerHTML = `
+            <div class="p-3 bg-gray-50 rounded">
+                <div class="text-sm text-gray-600">Total Messages</div>
+                <div class="text-2xl font-bold text-gray-800">${stats.total_messages || 0}</div>
+            </div>
+            <div class="p-3 bg-gray-50 rounded">
+                <div class="text-sm text-gray-600">Unique Users</div>
+                <div class="text-2xl font-bold text-gray-800">${stats.unique_users || 0}</div>
+            </div>
+            <div class="p-3 bg-gray-50 rounded">
+                <div class="text-sm text-gray-600">Database Age</div>
+                <div class="text-sm font-medium text-gray-800">
+                    ${stats.first_message_time ? 
+                        `Since ${new Date(stats.first_message_time).toLocaleDateString()}` : 
+                        'No data yet'}
+                </div>
+            </div>
+        `;
+        
+        logSQL('SELECT', 'Statistics loaded successfully');
+    } catch (error) {
+        console.error('Error loading stats:', error);
+        logSQL('ERROR', error.message);
+    }
+}
+
+// Add message form handler
+document.getElementById('addMessageForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = {
+        user_id: formData.get('user_id'),
+        content: formData.get('content')
+    };
+    
+    try {
+        logSQL('INSERT', `Adding message from user: ${data.user_id}`);
+        const response = await fetch(`${API_BASE}/message`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        
+        if (response.ok) {
+            logSQL('INSERT', 'Message added successfully');
+            e.target.reset();
+            loadMessages();
+            loadStats();
+        } else {
+            throw new Error('Failed to add message');
+        }
+    } catch (error) {
+        console.error('Error adding message:', error);
+        logSQL('ERROR', error.message);
+    }
+});
+
+// Filter messages by user
+function filterMessages() {
+    const userId = document.getElementById('userFilter').value.trim();
+    if (userId) {
+        loadMessages(userId);
+    } else {
+        loadMessages();
+    }
+}
+
+// Delete old messages
+async function deleteOldMessages() {
+    if (!confirm('Delete all messages older than 24 hours?')) return;
+    
+    try {
+        logSQL('DELETE', 'Deleting messages older than 24 hours');
+        const response = await fetch(`${API_BASE}/old?hours=24`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        logSQL('DELETE', `Deleted ${result.deleted} messages`);
+        loadMessages();
+        loadStats();
+    } catch (error) {
+        console.error('Error deleting messages:', error);
+        logSQL('ERROR', error.message);
+    }
+}
+
+// Export database
+async function exportDatabase() {
+    try {
+        logSQL('DUMP', 'Exporting SQLite database');
+        const response = await fetch(`${API_BASE}/export`);
+        const blob = await response.blob();
+        
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `sqlite-export-${Date.now()}.db`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        
+        logSQL('DUMP', 'Database exported successfully');
+    } catch (error) {
+        console.error('Error exporting database:', error);
+        logSQL('ERROR', error.message);
+    }
+}
+
+// Initialize
+loadMessages();
+loadStats();
+</script>
+{% endblock %}
