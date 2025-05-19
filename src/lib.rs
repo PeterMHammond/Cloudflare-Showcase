@@ -3,6 +3,7 @@ use utils::middleware::ValidationState;
 use routes::{
     about::handler as about,
     analytics::handler as analytics,
+    analytics_dashboard::handler as analytics_dashboard,
     index::handler as index,
     websocket_do::handler as websocket_do,
     websocket::handler as websocket,
@@ -69,6 +70,7 @@ async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .get_async("/", index)
         .get_async("/about", about)
         .get_async("/analytics", analytics)
+        .get_async("/analytics/dashboard", analytics_dashboard)
         .post_async("/analytics/data", routes::analytics::data_handler)
         .get_async("/websocket_do", websocket_do)
         .get_async("/websocket", websocket)

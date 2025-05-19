@@ -2,14 +2,24 @@
 <section class="h-full p-8 flex flex-col overflow-hidden">
   <!-- Header Section -->
   <article class="bg-white rounded-lg shadow-sm mb-4 p-4">
-    <h1 class="text-2xl font-bold text-gray-800">
-      Analytics Engine Dashboard
-    </h1>
-    <p class="text-gray-600 max-w-2xl">
-      This demo showcases Cloudflare's Analytics Engine integration with Rust Workers.
-      Track page load time, time on page, and user interactions with high-cardinality serverless analytics.
-      <span class="text-blue-600 font-medium">Your session ID: {{ session_id }}</span>
-    </p>
+    <div class="flex justify-between items-start">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-800">
+          Analytics Engine Dashboard
+        </h1>
+        <p class="text-gray-600 max-w-2xl">
+          This demo showcases Cloudflare's Analytics Engine integration with Rust Workers.
+          Track page load time, time on page, and user interactions with high-cardinality serverless analytics.
+          <span class="text-blue-600 font-medium">Your session ID: {{ session_id }}</span>
+        </p>
+      </div>
+      <a href="/analytics/dashboard" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+        </svg>
+        View Page Metrics
+      </a>
+    </div>
   </article>
 
   <!-- Analytics Display Section -->
