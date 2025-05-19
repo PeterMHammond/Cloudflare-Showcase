@@ -1,5 +1,6 @@
 pub mod about;
 pub mod analytics;
+pub mod analytics_api;
 pub mod analytics_dashboard;
 pub mod index;
 pub mod websocket;

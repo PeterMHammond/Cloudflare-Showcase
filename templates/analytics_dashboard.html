@@ -112,81 +112,18 @@
 </section>
 
 <script>
-  // Sample data structure that would normally come from Analytics Engine
-  const pagesData = [
-    {
-      url: "/",
-      title: "Home",
-      views: 1245,
-      loadTime: 354,
-      scrollDepth: 68,
-      timeOnPage: 127,
-      bounceRate: 32
+  // Store analytics data globally
+  let analyticsData = {
+    summary: {
+      totalPages: 0,
+      totalViews: 0,
+      avgLoadTime: 0,
+      avgScrollDepth: 0,
+      avgTimeOnPage: 0,
+      period: '7d'
     },
-    {
-      url: "/about",
-      title: "About Us",
-      views: 683,
-      loadTime: 287,
-      scrollDepth: 76,
-      timeOnPage: 210,
-      bounceRate: 24
-    },
-    {
-      url: "/analytics",
-      title: "Analytics Demo",
-      views: 421,
-      loadTime: 412,
-      scrollDepth: 83,
-      timeOnPage: 378,
-      bounceRate: 18
-    },
-    {
-      url: "/turnstile",
-      title: "Turnstile Demo",
-      views: 389,
-      loadTime: 305,
-      scrollDepth: 72,
-      timeOnPage: 145,
-      bounceRate: 22
-    },
-    {
-      url: "/websocket",
-      title: "WebSocket Demo",
-      views: 512,
-      loadTime: 347,
-      scrollDepth: 67,
-      timeOnPage: 192,
-      bounceRate: 28
-    },
-    {
-      url: "/sqlite",
-      title: "SQLite Demo",
-      views: 276,
-      loadTime: 332,
-      scrollDepth: 59,
-      timeOnPage: 156,
-      bounceRate: 35
-    },
-    {
-      url: "/study",
-      title: "Study Demo",
-      views: 187,
-      loadTime: 298,
-      scrollDepth: 81,
-      timeOnPage: 223,
-      bounceRate: 19
-    },
-    {
-      url: "/stt",
-      title: "Speech-to-Text Demo",
-      views: 324,
-      loadTime: 376,
-      scrollDepth: 79,
-      timeOnPage: 184,
-      bounceRate: 25
-    }
-  ];
+    pages: []
+  };
   
   // Format time in seconds to mm:ss
   function formatTime(seconds) {
@@ -195,25 +132,96 @@
     return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
   }
   
-  // Calculate and display summary metrics
+  // Fetch analytics data from Cloudflare Analytics Engine via our API
+  async function fetchAnalyticsData(period = '7d', metric = 'all') {
+    try {
+      const refreshButton = document.getElementById('refreshButton');
+      
+      // Show loading state
+      refreshButton.disabled = true;
+      refreshButton.innerHTML = `
+        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Loading...
+      `;
+      
+      // Make API request to our Analytics Engine endpoint
+      const response = await fetch(`/analytics/api/metrics?period=${period}&metric=${metric}`);
+      
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.message || 'Failed to fetch analytics data');
+      }
+      
+      // Update our global data store
+      analyticsData = result.data;
+      
+      // Update UI with the new data
+      updateSummaryMetrics();
+      populateMetricsTable();
+      
+      // Set the dropdown to match the period we just loaded
+      document.getElementById('timeRange').value = period;
+      
+      // Reset refresh button
+      refreshButton.disabled = false;
+      refreshButton.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+        </svg>
+        Refresh Data
+      `;
+      
+      return true;
+    } catch (error) {
+      console.error('Error fetching analytics data:', error);
+      
+      // Show error message
+      const refreshButton = document.getElementById('refreshButton');
+      refreshButton.disabled = false;
+      refreshButton.innerHTML = `
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+        </svg>
+        Retry
+      `;
+      
+      return false;
+    }
+  }
+  
+  // Update the dashboard summary metrics
   function updateSummaryMetrics() {
-    const totalPages = pagesData.length;
-    const totalViews = pagesData.reduce((sum, page) => sum + page.views, 0);
-    const avgLoadTime = Math.round(pagesData.reduce((sum, page) => sum + page.loadTime, 0) / totalPages);
-    const avgScrollDepth = Math.round(pagesData.reduce((sum, page) => sum + page.scrollDepth, 0) / totalPages);
-    const avgTimeOnPage = Math.round(pagesData.reduce((sum, page) => sum + page.timeOnPage, 0) / totalPages);
+    const summary = analyticsData.summary;
     
-    document.getElementById('total-pages').textContent = totalPages;
-    document.getElementById('pages-trend').textContent = `${totalViews} total views`;
+    document.getElementById('total-pages').textContent = summary.totalPages;
+    document.getElementById('pages-trend').textContent = `${Math.round(summary.totalViews).toLocaleString()} total views`;
     
-    document.getElementById('avg-load-time').textContent = `${avgLoadTime} ms`;
-    document.getElementById('load-trend').textContent = `5% faster than previous`;
+    document.getElementById('avg-load-time').textContent = `${Math.round(summary.avgLoadTime)} ms`;
+    document.getElementById('load-trend').textContent = `From Analytics Engine`;
     
-    document.getElementById('avg-scroll-depth').textContent = `${avgScrollDepth}%`;
-    document.getElementById('scroll-trend').textContent = `3% increase`;
+    document.getElementById('avg-scroll-depth').textContent = `${Math.round(summary.avgScrollDepth)}%`;
+    document.getElementById('scroll-trend').textContent = `Average across all pages`;
     
-    document.getElementById('avg-time-on-page').textContent = formatTime(avgTimeOnPage);
-    document.getElementById('time-trend').textContent = `10% longer stay`;
+    document.getElementById('avg-time-on-page').textContent = formatTime(Math.round(summary.avgTimeOnPage));
+    document.getElementById('time-trend').textContent = `For period: ${getPeriodText(summary.period)}`;
+  }
+  
+  // Convert period code to readable text
+  function getPeriodText(period) {
+    switch(period) {
+      case '24h': return 'Last 24 Hours';
+      case '7d': return 'Last 7 Days';
+      case '30d': return 'Last 30 Days';
+      default: return 'Last 7 Days';
+    }
   }
   
   // Populate the metrics table with page data
@@ -221,7 +229,20 @@
     const tableBody = document.getElementById('metrics-table');
     tableBody.innerHTML = '';
     
-    pagesData.forEach(page => {
+    if (!analyticsData.pages || !Array.isArray(analyticsData.pages)) {
+      // Show error message if no data
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td colspan="6" class="px-6 py-4 text-center text-sm text-gray-500">
+          No analytics data available. Please check your Analytics Engine integration.
+        </td>
+      `;
+      tableBody.appendChild(row);
+      return;
+    }
+    
+    // Populate table with real data from Analytics Engine
+    analyticsData.pages.forEach(page => {
       const row = document.createElement('tr');
       row.innerHTML = `
         <td class="px-6 py-4 whitespace-nowrap">
@@ -229,24 +250,24 @@
           <div class="text-sm text-gray-500">${page.title}</div>
         </td>
         <td class="px-6 py-4 whitespace-nowrap">
-          <div class="text-sm text-gray-900">${page.views.toLocaleString()}</div>
+          <div class="text-sm text-gray-900">${Math.round(page.views).toLocaleString()}</div>
         </td>
         <td class="px-6 py-4 whitespace-nowrap">
-          <div class="text-sm text-gray-900">${page.loadTime} ms</div>
+          <div class="text-sm text-gray-900">${Math.round(page.loadTime)} ms</div>
         </td>
         <td class="px-6 py-4 whitespace-nowrap">
           <div class="flex items-center">
             <div class="w-16 bg-gray-200 rounded-full h-2.5">
-              <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${page.scrollDepth}%"></div>
+              <div class="bg-blue-600 h-2.5 rounded-full" style="width: ${Math.round(page.scrollDepth)}%"></div>
             </div>
-            <span class="ml-2 text-sm text-gray-900">${page.scrollDepth}%</span>
+            <span class="ml-2 text-sm text-gray-900">${Math.round(page.scrollDepth)}%</span>
           </div>
         </td>
         <td class="px-6 py-4 whitespace-nowrap">
-          <div class="text-sm text-gray-900">${formatTime(page.timeOnPage)}</div>
+          <div class="text-sm text-gray-900">${formatTime(Math.round(page.timeOnPage))}</div>
         </td>
         <td class="px-6 py-4 whitespace-nowrap">
-          <div class="text-sm text-gray-900">${page.bounceRate}%</div>
+          <div class="text-sm text-gray-900">${Math.round(page.bounceRate)}%</div>
         </td>
       `;
       tableBody.appendChild(row);
@@ -261,8 +282,11 @@
       const rows = document.querySelectorAll('#metrics-table tr');
       
       rows.forEach(row => {
-        const url = row.querySelector('td:first-child').textContent.toLowerCase();
-        if (url.includes(searchTerm)) {
+        const url = row.querySelector('td:first-child')?.textContent.toLowerCase();
+        if (url && url.includes(searchTerm)) {
+          row.style.display = '';
+        } else if (row.querySelector('td[colspan="6"]')) {
+          // Don't hide the "no data" message
           row.style.display = '';
         } else {
           row.style.display = 'none';
@@ -271,53 +295,34 @@
     });
   }
   
-  // Set up refresh button
-  function setupRefreshButton() {
-    const refreshButton = document.getElementById('refreshButton');
-    refreshButton.addEventListener('click', () => {
-      // Simulate loading
-      refreshButton.disabled = true;
-      refreshButton.innerHTML = `
-        <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-        </svg>
-        Refreshing...
-      `;
-      
-      // Simulate API call delay
-      setTimeout(() => {
-        updateSummaryMetrics();
-        populateMetricsTable();
-        
-        refreshButton.disabled = false;
-        refreshButton.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          Refresh Data
-        `;
-      }, 800);
-    });
-  }
-  
   // Initialize the dashboard
   document.addEventListener('DOMContentLoaded', () => {
-    updateSummaryMetrics();
-    populateMetricsTable();
+    // Set up event handlers
     setupSearch();
-    setupRefreshButton();
     
-    // Set up filter change handlers
-    document.getElementById('timeRange').addEventListener('change', () => {
-      updateSummaryMetrics();
-      populateMetricsTable();
+    // Set up refresh button
+    document.getElementById('refreshButton').addEventListener('click', () => {
+      const period = document.getElementById('timeRange').value;
+      const metric = document.getElementById('metricType').value;
+      fetchAnalyticsData(period, metric);
     });
     
-    document.getElementById('metricType').addEventListener('change', () => {
-      updateSummaryMetrics();
-      populateMetricsTable();
+    // Set up time range filter
+    document.getElementById('timeRange').addEventListener('change', (e) => {
+      const period = e.target.value;
+      const metric = document.getElementById('metricType').value;
+      fetchAnalyticsData(period, metric);
     });
+    
+    // Set up metric type filter
+    document.getElementById('metricType').addEventListener('change', (e) => {
+      const metric = e.target.value;
+      const period = document.getElementById('timeRange').value;
+      fetchAnalyticsData(period, metric);
+    });
+    
+    // Initial data load
+    fetchAnalyticsData('7d', 'all');
   });
 </script>
 {% endblock %}

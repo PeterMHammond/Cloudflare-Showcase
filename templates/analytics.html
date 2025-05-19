@@ -52,30 +52,13 @@
     </div>
   </div>
 
-  <!-- Performance Metrics Table -->
+  <!-- Performance Metrics Cards -->
   <div class="bg-white p-4 rounded-lg shadow mb-4">
-    <h3 class="text-lg font-medium text-gray-800 mb-2">
-      Detailed Performance Metrics
+    <h3 class="text-lg font-medium text-gray-800 mb-4">
+      Key Performance Metrics
     </h3>
-    <div class="overflow-x-auto">
-      <table class="min-w-full divide-y divide-gray-200">
-        <thead>
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Metric
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Value
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Description
-            </th>
-          </tr>
-        </thead>
-        <tbody id="metrics-table" class="bg-white divide-y divide-gray-200">
-          <!-- Metrics will be populated by JavaScript -->
-        </tbody>
-      </table>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="metrics-cards">
+      <!-- Metrics cards will be populated by JavaScript -->
     </div>
   </div>
 
@@ -159,37 +142,61 @@
                           window.performance.timing.navigationStart;
       document.getElementById('load-time-display').textContent = `${pageLoadTime} ms`;
 
-      // Populate metrics table
+      // Calculate performance metrics with proper validation
+      const timing = window.performance.timing;
+      
+      // Helper function to safely calculate timing differences
+      const calculateTiming = (end, start) => {
+        const value = end - start;
+        return value > 0 && value < 60000 ? value : 0; // Sanity check for valid times (< 1 min)
+      };
+      
+      // Define metrics with safer calculations
       const metrics = [
-        { name: 'DNS Lookup', 
-          value: `${window.performance.timing.domainLookupEnd - window.performance.timing.domainLookupStart} ms`,
-          description: 'Time spent resolving the domain name' },
-        { name: 'TCP Connection', 
-          value: `${window.performance.timing.connectEnd - window.performance.timing.connectStart} ms`,
-          description: 'Time spent establishing TCP connection' },
-        { name: 'Request Time', 
-          value: `${window.performance.timing.responseStart - window.performance.timing.requestStart} ms`,
-          description: 'Time from request start until first byte received' },
-        { name: 'Response Time', 
-          value: `${window.performance.timing.responseEnd - window.performance.timing.responseStart} ms`,
-          description: 'Time spent receiving the response' },
-        { name: 'DOM Processing', 
-          value: `${window.performance.timing.domComplete - window.performance.timing.domLoading} ms`,
-          description: 'Time spent processing the DOM tree' },
-        { name: 'Page Rendering', 
-          value: `${window.performance.timing.loadEventEnd - window.performance.timing.domComplete} ms`,
-          description: 'Time spent rendering the page' }
+        { 
+          name: 'DNS Lookup', 
+          value: calculateTiming(timing.domainLookupEnd, timing.domainLookupStart),
+          description: 'Time spent resolving the domain name',
+          icon: `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9" />
+                 </svg>`
+        },
+        { 
+          name: 'Server Response', 
+          value: calculateTiming(timing.responseEnd, timing.requestStart),
+          description: 'Time from request until response complete',
+          icon: `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 12h14M5 12a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v4a2 2 0 01-2 2M5 12a2 2 0 00-2 2v4a2 2 0 002 2h14a2 2 0 002-2v-4a2 2 0 00-2-2m-2-4h.01M17 16h.01" />
+                 </svg>`
+        },
+        { 
+          name: 'Page Rendering', 
+          value: calculateTiming(timing.loadEventEnd, timing.domLoading),
+          description: 'Time to process and render the page',
+          icon: `<svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                 </svg>`
+        }
       ];
 
-      const metricsTable = document.getElementById('metrics-table');
+      // Display metrics as cards
+      const metricsContainer = document.getElementById('metrics-cards');
       metrics.forEach(metric => {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">${metric.name}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-bold">${metric.value}</td>
-          <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${metric.description}</td>
+        const card = document.createElement('div');
+        card.className = 'bg-gray-50 rounded-lg p-4 shadow-sm border border-gray-100';
+        card.innerHTML = `
+          <div class="flex items-start">
+            <div class="mr-4">
+              ${metric.icon}
+            </div>
+            <div>
+              <h4 class="text-lg font-medium text-gray-800">${metric.name}</h4>
+              <p class="text-sm text-gray-500">${metric.description}</p>
+              <div class="mt-2 text-2xl font-bold text-blue-600">${metric.value} ms</div>
+            </div>
+          </div>
         `;
-        metricsTable.appendChild(row);
+        metricsContainer.appendChild(card);
       });
 
       // Log the page load event
