@@ -5,7 +5,7 @@ use crate::utils::templates::render_template;
 use serde_json::json;
 
 pub async fn handler(_req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
-    let base = BaseTemplate::new(&ctx, "SQLite in Durable Objects - Cloudflare Showcase", "SQLite Demo").await?;
+    let base = BaseTemplate::new(&ctx, "SQLite Demo", "SQLite in Durable Objects - Cloudflare Showcase").await?;
     
     let context = json!({
         "base": base
