@@ -155,13 +155,22 @@ pub async fn data_handler(mut req: Request, ctx: RouteContext<ValidationState>) 
             let page = client_data.data.get("page")
                 .and_then(|v| v.as_str())
                 .unwrap_or("unknown");
+                
+            let url = client_data.data.get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or("/");
+                
+            let milestone = client_data.data.get("milestone")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
             
             // Create a data point for page view percentage
             DataPoint {
                 blobs: Some(vec![
                     "page_viewed".to_string(),
-                    req.url()?.path().to_string(),
+                    url.to_string(),
                     page.to_string(),
+                    milestone.to_string(),
                 ]),
                 doubles: Some(vec![percentage]),
                 indexes: Some(vec![client_data.session_id]),

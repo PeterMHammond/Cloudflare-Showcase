@@ -2,6 +2,9 @@
   (() => {
     const sessionId = "{{ session_id | default(uuid4()) }}";
     const pageName = "{{ base.title }}";
+    const pageUrl = window.location.pathname;
+    
+    // Throttle function to limit execution frequency
     const throttle = (fn, delay) => {
       let lastTime = 0;
       return (...args) => {
@@ -19,7 +22,11 @@
         const response = await fetch('/analytics/data', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ session_id: sessionId, event_type: eventType, data })
+          body: JSON.stringify({ 
+            session_id: sessionId, 
+            event_type: eventType, 
+            data: { ...data, page: pageName, url: pageUrl }
+          })
         });
         return response.ok;
       } catch (e) {
@@ -28,31 +35,60 @@
       }
     };
 
-    // Calculate scroll percentage
-    const getScrollPercentage = () => {
-      const windowHeight = window.innerHeight;
-      const documentHeight = Math.max(
-        document.body.scrollHeight,
-        document.documentElement.scrollHeight,
-        document.body.offsetHeight,
-        document.documentElement.offsetHeight,
-        document.body.clientHeight,
-        document.documentElement.clientHeight
+    // Get viewport height with cross-browser compatibility
+    const getViewportHeight = () => {
+      return window.innerHeight || 
+             document.documentElement.clientHeight || 
+             document.body.clientHeight || 
+             0;
+    };
+
+    // Get current scroll position with cross-browser compatibility
+    const getScrollPosition = () => {
+      return window.pageYOffset || 
+             document.body.scrollTop || 
+             document.documentElement.scrollTop || 
+             0;
+    };
+
+    // Get total document height with cross-browser compatibility
+    const getDocumentHeight = () => {
+      return Math.max(
+        document.body.scrollHeight || 0,
+        document.documentElement.scrollHeight || 0,
+        document.body.offsetHeight || 0,
+        document.documentElement.offsetHeight || 0,
+        document.body.clientHeight || 0,
+        document.documentElement.clientHeight || 0
       );
+    };
+
+    // Calculate scroll percentage accurately
+    const getScrollPercentage = () => {
+      const viewportHeight = getViewportHeight();
+      const documentHeight = getDocumentHeight();
+      const scrollPosition = getScrollPosition();
       
-      if (documentHeight <= windowHeight) return 100;
+      // If document fits in viewport, scrolling to 100% isn't possible
+      if (documentHeight <= viewportHeight) {
+        return 0;
+      }
       
-      const scrollTop = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
-      const scrollableDistance = documentHeight - windowHeight;
-      return Math.round((Math.min(scrollTop, scrollableDistance) / scrollableDistance) * 100);
+      // Calculate percentage based on how much content has been viewed
+      const scrollableDistance = documentHeight - viewportHeight;
+      const scrolledPosition = Math.min(scrollPosition, scrollableDistance);
+      return Math.round((scrolledPosition / scrollableDistance) * 100);
     };
 
     document.addEventListener('DOMContentLoaded', () => {
+      // Keep track of reached scroll milestones to avoid duplicate events
+      let reachedMilestones = new Set();
+      
       // Track page load time
       setTimeout(() => {
         const loadTime = window.performance.timing.domContentLoadedEventEnd - 
-                        window.performance.timing.navigationStart;
-        sendAnalytics('page_load', { load_time_ms: loadTime, page: pageName });
+                         window.performance.timing.navigationStart;
+        sendAnalytics('page_load', { load_time_ms: loadTime });
       }, 0);
 
       // Time on page tracking
@@ -60,7 +96,7 @@
       const timeInterval = setInterval(() => {
         seconds++;
         if (seconds % 30 === 0) {
-          sendAnalytics('time_on_page', { seconds, page: pageName });
+          sendAnalytics('time_on_page', { seconds });
         }
       }, 1000);
 
@@ -68,40 +104,47 @@
       const interactions = { click: 0, scroll: 0, keypress: 0 };
       let maxScrollPercentage = 0;
       
-      // Check initial scroll position
-      setTimeout(() => {
-        maxScrollPercentage = getScrollPercentage();
-        if (maxScrollPercentage > 0) {
+      // Report scroll depth at specific milestones (25%, 50%, 75%, 100%)
+      const reportScrollMilestone = (percentage) => {
+        // Calculate the nearest milestone (25%, 50%, 75%, 100%)
+        const milestone = Math.floor(percentage / 25) * 25;
+        
+        // If we've reached a new milestone that we haven't reported yet
+        if (milestone > 0 && !reachedMilestones.has(milestone) && milestone <= 100) {
+          reachedMilestones.add(milestone);
           sendAnalytics('page_viewed', { 
-            percentage: Math.floor(maxScrollPercentage / 10) * 10, 
-            page: pageName 
+            percentage: milestone,
+            milestone: `${milestone}%`
           });
         }
+      };
+      
+      // Check initial scroll position after a short delay
+      setTimeout(() => {
+        const initialPercentage = getScrollPercentage();
+        maxScrollPercentage = initialPercentage;
+        reportScrollMilestone(initialPercentage);
       }, 1000);
       
-      // Handle user interactions
+      // Handle user interactions with throttling
       const reportInteraction = throttle((type) => {
         sendAnalytics('interaction', { 
           type, 
-          counts: interactions, 
-          page: pageName, 
+          counts: interactions,
           max_scroll_percentage: maxScrollPercentage 
         });
       }, 5000);
       
-      // Handle scroll tracking
+      // Handle scroll with throttling
       const reportScroll = throttle(() => {
-        const current = getScrollPercentage();
-        const oldBracket = Math.floor(maxScrollPercentage / 10) * 10;
-        const newBracket = Math.floor(current / 10) * 10;
+        const currentPercentage = getScrollPercentage();
         
-        if (current > maxScrollPercentage) {
-          maxScrollPercentage = current;
-          if (newBracket > oldBracket) {
-            sendAnalytics('page_viewed', { percentage: newBracket, page: pageName });
-          }
+        // Update max scroll if we've scrolled further
+        if (currentPercentage > maxScrollPercentage) {
+          maxScrollPercentage = currentPercentage;
+          reportScrollMilestone(currentPercentage);
         }
-      }, 2000);
+      }, 1000);
       
       // Set up event listeners
       ['click', 'keypress'].forEach(type => {
@@ -114,12 +157,18 @@
       document.addEventListener('scroll', () => {
         interactions.scroll++;
         reportScroll();
-        reportInteraction('scroll');
       });
+      
+      // Update measurements when window is resized
+      window.addEventListener('resize', reportScroll);
       
       // Handle page unload
       window.addEventListener('beforeunload', () => {
-        sendAnalytics('time_on_page', { seconds, page: pageName, final: true });
+        sendAnalytics('time_on_page', { 
+          seconds, 
+          final: true,
+          max_scroll_percentage: maxScrollPercentage 
+        });
         clearInterval(timeInterval);
       });
     });
