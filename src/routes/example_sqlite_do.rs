@@ -178,15 +178,13 @@ impl ExampleSqliteDO {
         }
     }
     
-    async fn delete_old_messages(&self, hours: u32) -> Result<u64> {
+    async fn delete_messages(&self) -> Result<u64> {
         let storage = self.state.storage();
         let sql = storage.sql()?;
         
-        let cutoff_time = Date::now().as_millis() as i64 - (hours as i64 * 60 * 60 * 1000);
+        let query = "DELETE FROM messages";
         
-        let query = format!("DELETE FROM messages WHERE timestamp < {}", cutoff_time);
-        
-        match sql.exec(&query) {
+        match sql.exec(query) {
             Ok(_) => Ok(0), // We need to get row count from metadata
             Err(e) => Err(Error::JsError(format!("Failed to delete: {:?}", e)))
         }
@@ -419,35 +417,15 @@ impl DurableObject for ExampleSqliteDO {
                 Response::from_json(&messages)
             }
             
-            (Method::Delete, "/old") => {
-                console_log!("Processing DELETE /old request");
-                let query_string = url.query().unwrap_or_default();
-                console_log!("Query string: '{}'", query_string);
-                
-                let query_params: std::collections::HashMap<String, String> = query_string
-                    .split('&')
-                    .filter(|s| !s.is_empty())
-                    .filter_map(|pair| {
-                        let mut parts = pair.split('=');
-                        match (parts.next(), parts.next()) {
-                            (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
-                            _ => None,
-                        }
-                    })
-                    .collect();
-                
-                console_log!("Parsed query params: {:?}", query_params);
-                
-                let hours = query_params.get("hours")
-                    .and_then(|h| h.parse().ok())
-                    .unwrap_or(24);
-                    
-                console_log!("Deleting messages older than {} hours", hours);
-                let deleted = self.delete_old_messages(hours).await?;
+            (Method::Delete, "/messages") => {
+                console_log!("Processing DELETE /messages request");
+                console_log!("Deleting all messages");
+                let deleted = self.delete_messages().await?;
                 console_log!("Deleted {} messages", deleted);
                 
                 Response::from_json(&serde_json::json!({
-                    "deleted": deleted
+                    "deleted": deleted,
+                    "message": "All messages deleted successfully"
                 }))
             }
             
