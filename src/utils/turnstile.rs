@@ -24,12 +24,24 @@ pub async fn validate_turnstile_token(
         form_data.push(("remoteip", ip));
     }
 
-    let client = reqwest::Client::new();
-    let response = client
-        .post(api_url)
-        .form(&form_data)
-        .send()
-        .await
+    let form_body = form_data
+        .iter()
+        .map(|(k, v)| format!("{}={}", k, js_sys::encode_uri_component(v).as_string().unwrap()))
+        .collect::<Vec<_>>()
+        .join("&");
+
+    let mut headers = Headers::new();
+    headers.set("Content-Type", "application/x-www-form-urlencoded")?;
+
+    let request = Request::new_with_init(
+        api_url,
+        RequestInit::new()
+            .with_method(Method::Post)
+            .with_headers(headers)
+            .with_body(Some(js_sys::Uint8Array::from(form_body.as_bytes()).into())),
+    )?;
+
+    let mut response = Fetch::Request(request).send().await
         .map_err(|e| {
             console_error!("Failed to call Turnstile API: {}", e);
             Error::from(format!("Failed to call Turnstile API: {}", e))

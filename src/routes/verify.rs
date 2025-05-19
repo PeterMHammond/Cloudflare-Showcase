@@ -46,13 +46,13 @@ pub async fn post_handler(mut req: Request, ctx: RouteContext<ValidationState>) 
         let cookie_key = Key::derive_from(secret_bytes);
         let mut jar = CookieJar::new();
         
-        let cookie = Cookie::build(("turnstile_validated", "true"))
+        let cookie = Cookie::build("turnstile_validated", "true")
             .path("/")
             .max_age(cookie::time::Duration::days(7))
             .http_only(true)
             .secure(true)
             .same_site(cookie::SameSite::Strict)
-            .build();
+            .finish();
         jar.signed_mut(&cookie_key).add(cookie);
         
         let mut response = Response::from_json(&VerifyResponse {

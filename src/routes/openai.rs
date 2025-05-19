@@ -63,27 +63,33 @@ pub async fn handler(req: Request, ctx: RouteContext<ValidationState>) -> Result
     }
     console_log!("No header value found");
 
-    let client = reqwest::Client::new();
-    let response = client
-        .post("https://api.openai.com/v1/realtime/sessions")
-        .header("Authorization", format!("Bearer {}", api_key))
-        .header("Content-Type", "application/json")
-        .json(&json!({
-            "model": "gpt-4o-realtime-preview-2024-12-17",
-            "instructions": "You are a just to respond with the word 'OpenAI is awesome!'.",
-            "voice": "verse"
-        }))
-        .send()
-        .await
-        .map_err(|e| Error::from(e.to_string()))?;
-
-    if !response.status().is_success() {
-        let error_text = response.text().await.map_err(|e| Error::from(e.to_string()))?;
+    let mut headers = Headers::new();
+    headers.set("Authorization", &format!("Bearer {}", api_key))?;
+    headers.set("Content-Type", "application/json")?;
+    
+    let request_body = json!({
+        "model": "gpt-4o-realtime-preview-2024-12-17",
+        "instructions": "You are a just to respond with the word 'OpenAI is awesome!'.",
+        "voice": "verse"
+    });
+    
+    let request = Request::new_with_init(
+        "https://api.openai.com/v1/realtime/sessions",
+        RequestInit::new()
+            .with_method(Method::Post)
+            .with_headers(headers)
+            .with_body(Some(js_sys::Uint8Array::from(request_body.to_string().as_bytes()).into())),
+    )?;
+    
+    let mut response = Fetch::Request(request).send().await?;
+    
+    if response.status_code() != 200 {
+        let error_text = response.text().await?;
         console_log!("OpenAI API Error Response: {}", error_text);
         return Response::error(error_text, 500);
     }
 
-    let session: OpenAISessionResponse = response.json().await.map_err(|e| Error::from(e.to_string()))?;
+    let session: OpenAISessionResponse = response.json().await?;
 
     let base = BaseTemplate::new(&ctx, "OpenAI - Cloudflare Showcase", "OpenAI").await?;
     
