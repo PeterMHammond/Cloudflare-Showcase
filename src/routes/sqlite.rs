@@ -13,12 +13,29 @@ pub async fn handler(_req: Request, ctx: RouteContext<ValidationState>) -> Resul
     
     match render_template("sqlite.html", context) {
         Ok(html) => Response::from_html(html),
-        Err(err) => Response::error(format!("Failed to render template: {}", err), 500),
+        Err(err) => {
+            console_error!("Template render error: {}", err);
+            Response::error(format!("Failed to render template: {}", err), 500)
+        }
     }
 }
 
 pub async fn api_handler(req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
+    console_log!("SQLite API handler called: {} {}", req.method(), req.url()?.path());
+    
     let namespace = ctx.env.durable_object("ExampleSqliteDO")?;
-    let stub = namespace.id_from_name("ExampleSqliteDO")?.get_stub()?;
-    stub.fetch_with_request(req).await
+    // Use a consistent ID for the demo to maintain state across requests
+    let stub = namespace.id_from_name("sqlite-demo-instance")?.get_stub()?;
+    
+    console_log!("Forwarding request to DO");
+    let mut response = stub.fetch_with_request(req).await?;
+    let status = response.status_code();
+    
+    console_log!("DO response status: {}", status);
+    if status == 404 {
+        let body: String = response.text().await.unwrap_or_default();
+        console_log!("404 response body: {}", body);
+    }
+    
+    Ok(response)
 }

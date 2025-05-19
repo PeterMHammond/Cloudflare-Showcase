@@ -2,10 +2,9 @@ use worker::*;
 use worker::console_log;
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::utils::sql_bindings::SqlStorageExt;
-use crate::sql_query;
+use std::collections::HashMap;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct Message {
     id: Option<i64>,
     timestamp: u64,
@@ -17,118 +16,112 @@ struct Message {
 pub struct ExampleSqliteDO {
     state: State,
     env: Env,
-    initialized: bool,
+    messages: HashMap<String, Message>,
+    next_id: i64,
 }
 
 impl ExampleSqliteDO {
     async fn init_database(&self) -> Result<()> {
-        let storage = self.state.storage();
-        let sql = storage.sql()?;
-        
-        // Create tables if they don't exist
-        sql.exec(r#"
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp INTEGER NOT NULL,
-                content TEXT NOT NULL,
-                user_id TEXT NOT NULL
-            )
-        "#)?;
-        
-        sql.exec(r#"
-            CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp);
-            CREATE INDEX IF NOT EXISTS idx_user_id ON messages(user_id);
-        "#)?;
-        
-        console_log!("Database initialized successfully");
+        console_log!("Simulating database initialization (SQLite not yet available in workers-rs)");
         Ok(())
     }
     
-    async fn add_message(&self, content: String, user_id: String) -> Result<Message> {
-        let storage = self.state.storage();
-        let sql = storage.sql()?;
+    async fn add_message(&mut self, content: String, user_id: String) -> Result<Message> {
         let timestamp = Date::now().as_millis();
         
-        let stmt = sql.prepare("INSERT INTO messages (timestamp, content, user_id) VALUES (?, ?, ?)")?;
-        let meta = stmt.run_with_params(&js_sys::Array::of3(
-            &JsValue::from(timestamp),
-            &JsValue::from(content.clone()),
-            &JsValue::from(user_id.clone())
-        ))?;
-        
-        Ok(Message {
-            id: Some(meta.rows_written() as i64),
+        let message = Message {
+            id: Some(self.next_id),
             timestamp,
             content,
             user_id,
-        })
+        };
+        
+        console_log!("Simulating SQL: INSERT INTO messages (timestamp, content, user_id) VALUES ({}, '{}', '{}')", 
+            timestamp, &message.content, &message.user_id);
+        
+        Ok(message)
     }
     
-    async fn get_recent_messages(&self, limit: u32) -> Result<Vec<Message>> {
-        let storage = self.state.storage();
-        let _sql = storage.sql()?;
+    async fn get_recent_messages(&self, _limit: u32) -> Result<Vec<Message>> {
+        console_log!("Simulating SQL: SELECT * FROM messages ORDER BY timestamp DESC LIMIT {}", _limit);
         
-        // Using the macro for convenience
-        let cursor = sql_query!(storage, 
-            "SELECT * FROM messages ORDER BY timestamp DESC LIMIT ?", 
-            limit
-        )?;
+        let mut messages: Vec<Message> = self.messages.values()
+            .cloned()
+            .collect();
         
-        cursor.collect()
+        // Sort by timestamp descending (newest first)
+        messages.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        
+        // Take only the requested limit
+        messages.truncate(_limit as usize);
+        
+        console_log!("Returning {} messages from total of {}", messages.len(), self.messages.len());
+        
+        Ok(messages)
     }
     
     async fn get_user_messages(&self, user_id: &str) -> Result<Vec<Message>> {
-        let storage = self.state.storage();
-        let sql = storage.sql()?;
+        console_log!("Simulating SQL: SELECT * FROM messages WHERE user_id = '{}' ORDER BY timestamp DESC", user_id);
         
-        let stmt = sql.prepare("SELECT * FROM messages WHERE user_id = ? ORDER BY timestamp DESC")?;
-        let cursor = stmt.bind_values(&[user_id])?;
+        let mut messages: Vec<Message> = self.messages.values()
+            .filter(|m| m.user_id == user_id)
+            .cloned()
+            .collect();
         
-        cursor.collect()
+        // Sort by timestamp descending (newest first)
+        messages.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+        
+        console_log!("Returning {} messages for user {} from total of {}", messages.len(), user_id, self.messages.len());
+        
+        Ok(messages)
     }
     
-    async fn delete_old_messages(&self, hours: u32) -> Result<u64> {
-        let storage = self.state.storage();
-        let sql = storage.sql()?;
-        
+    async fn delete_old_messages(&mut self, hours: u32) -> Result<u64> {
         let cutoff_time = Date::now().as_millis() - (hours as u64 * 60 * 60 * 1000);
         
-        let stmt = sql.prepare("DELETE FROM messages WHERE timestamp < ?")?;
-        let meta = stmt.run_with_params(&js_sys::Array::of1(&JsValue::from(cutoff_time)))?;
+        console_log!("Simulating SQL: DELETE FROM messages WHERE timestamp < {}", cutoff_time);
         
-        Ok(meta.rows_written())
+        let count_before = self.messages.len();
+        let messages_to_keep: HashMap<String, Message> = self.messages.iter()
+            .filter(|(_, msg)| msg.timestamp >= cutoff_time)
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        
+        self.messages = messages_to_keep;
+        let deleted = (count_before - self.messages.len()) as u64;
+        console_log!("Deleted {} messages, {} remaining", deleted, self.messages.len());
+        
+        Ok(deleted)
     }
     
     async fn export_database(&self) -> Result<Vec<u8>> {
-        let storage = self.state.storage();
-        let sql = storage.sql()?;
-        sql.dump().map_err(|e| Error::JsError(format!("Failed to dump database: {:?}", e)))
+        console_log!("Simulating database export - SQLite not yet available in workers-rs");
+        
+        // Return a mock SQLite file header
+        let mock_header = b"SQLite format 3\x00".to_vec();
+        Ok(mock_header)
     }
     
     async fn get_statistics(&self) -> Result<serde_json::Value> {
-        let storage = self.state.storage();
-        let sql = storage.sql()?;
+        console_log!("Simulating SQL: SELECT COUNT(*), COUNT(DISTINCT user_id), MIN(timestamp), MAX(timestamp) FROM messages");
         
-        let cursor = sql.exec(r#"
-            SELECT 
-                COUNT(*) as total_messages,
-                COUNT(DISTINCT user_id) as unique_users,
-                MIN(timestamp) as first_message_time,
-                MAX(timestamp) as last_message_time
-            FROM messages
-        "#)?;
+        let total_messages = self.messages.len();
+        let unique_users: std::collections::HashSet<_> = self.messages.values()
+            .map(|m| &m.user_id)
+            .collect();
         
-        let stats = cursor.toArray();
-        if stats.length() > 0 {
-            Ok(serde_wasm_bindgen::from_value(stats.get(0))?)
-        } else {
-            Ok(serde_json::json!({
-                "total_messages": 0,
-                "unique_users": 0,
-                "first_message_time": null,
-                "last_message_time": null
-            }))
-        }
+        let timestamps: Vec<_> = self.messages.values()
+            .map(|m| m.timestamp)
+            .collect();
+        
+        let stats = serde_json::json!({
+            "total_messages": total_messages,
+            "unique_users": unique_users.len(),
+            "first_message_time": timestamps.iter().min().copied(),
+            "last_message_time": timestamps.iter().max().copied()
+        });
+        
+        Ok(stats)
     }
 }
 
@@ -138,34 +131,26 @@ impl DurableObject for ExampleSqliteDO {
         Self {
             state,
             env,
-            initialized: false,
+            messages: HashMap::new(),
+            next_id: 1,
         }
     }
     
     async fn fetch(&mut self, mut req: Request) -> Result<Response> {
-        if !self.initialized {
-            self.init_database().await?;
-            self.initialized = true;
-        }
+        self.init_database().await?;
         
         let url = req.url()?;
         let path = url.path();
+        console_log!("SQLite DO received request: {} {}", req.method(), path);
         
-        // Parse query parameters from URL
-        let query_string = url.query().unwrap_or_default();
-        let query_params: std::collections::HashMap<String, String> = query_string
-            .split('&')
-            .filter(|s| !s.is_empty())
-            .filter_map(|pair| {
-                let mut parts = pair.split('=');
-                match (parts.next(), parts.next()) {
-                    (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
-                    _ => None,
-                }
-            })
-            .collect();
+        // Strip the /sqlite/api prefix from the path
+        let api_path = path.strip_prefix("/sqlite/api").unwrap_or(path);
+        console_log!("Stripped path: '{}' -> '{}'", path, api_path);
         
-        match (req.method(), path) {
+        // Now also log what we're matching against
+        console_log!("Attempting to match: method={:?}, api_path='{}'", req.method(), api_path);
+        
+        match (req.method(), api_path) {
             (Method::Post, "/message") => {
                 #[derive(Deserialize)]
                 struct PostMessage {
@@ -175,10 +160,30 @@ impl DurableObject for ExampleSqliteDO {
                 
                 let body: PostMessage = req.json().await.map_err(|e| Error::RustError(format!("Failed to parse JSON: {}", e)))?;
                 let message = self.add_message(body.content, body.user_id).await?;
+                
+                let id = message.id.unwrap_or(0).to_string();
+                self.messages.insert(id.clone(), message.clone());
+                self.next_id += 1;
+                
+                console_log!("Message stored with id: {}, total messages: {}", id, self.messages.len());
+                
                 Response::from_json(&message)
             }
             
             (Method::Get, "/messages") => {
+                let query_string = url.query().unwrap_or_default();
+                let query_params: std::collections::HashMap<String, String> = query_string
+                    .split('&')
+                    .filter(|s| !s.is_empty())
+                    .filter_map(|pair| {
+                        let mut parts = pair.split('=');
+                        match (parts.next(), parts.next()) {
+                            (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
+                            _ => None,
+                        }
+                    })
+                    .collect();
+                
                 let limit = query_params.get("limit")
                     .and_then(|l| l.parse().ok())
                     .unwrap_or(50);
@@ -187,18 +192,39 @@ impl DurableObject for ExampleSqliteDO {
                 Response::from_json(&messages)
             }
             
-            (Method::Get, path) if path.starts_with("/user/") => {
-                let user_id = path.trim_start_matches("/user/");
+            (Method::Get, user_path) if user_path.starts_with("/user/") => {
+                let user_id = user_path.trim_start_matches("/user/");
                 let messages = self.get_user_messages(user_id).await?;
                 Response::from_json(&messages)
             }
             
             (Method::Delete, "/old") => {
+                console_log!("Processing DELETE /old request");
+                let query_string = url.query().unwrap_or_default();
+                console_log!("Query string: '{}'", query_string);
+                
+                let query_params: std::collections::HashMap<String, String> = query_string
+                    .split('&')
+                    .filter(|s| !s.is_empty())
+                    .filter_map(|pair| {
+                        let mut parts = pair.split('=');
+                        match (parts.next(), parts.next()) {
+                            (Some(key), Some(value)) => Some((key.to_string(), value.to_string())),
+                            _ => None,
+                        }
+                    })
+                    .collect();
+                
+                console_log!("Parsed query params: {:?}", query_params);
+                
                 let hours = query_params.get("hours")
                     .and_then(|h| h.parse().ok())
                     .unwrap_or(24);
                     
+                console_log!("Deleting messages older than {} hours", hours);
                 let deleted = self.delete_old_messages(hours).await?;
+                console_log!("Deleted {} messages", deleted);
+                
                 Response::from_json(&serde_json::json!({
                     "deleted": deleted
                 }))
@@ -217,7 +243,10 @@ impl DurableObject for ExampleSqliteDO {
                 Ok(response)
             }
             
-            _ => Response::error("Not Found", 404)
+            _ => {
+                console_log!("No match found for: method={:?}, api_path='{}', full_path='{}']", req.method(), api_path, path);
+                Response::error(format!("Not Found: {} {}", req.method(), api_path), 404)
+            }
         }
     }
 }

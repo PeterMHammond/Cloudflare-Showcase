@@ -24,6 +24,7 @@ static TEMPLATES: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     templates.insert("verify.html", include_str!("../../templates/verify.html"));
     templates.insert("version.html", include_str!("../../templates/version.html"));
     templates.insert("websocket.html", include_str!("../../templates/websocket.html"));
+    templates.insert("sqlite.html", include_str!("../../templates/sqlite.html"));
     
     templates
 });

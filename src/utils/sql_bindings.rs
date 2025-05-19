@@ -1,7 +1,7 @@
 use worker::{Error, Storage, wasm_bindgen, js_sys};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
-use js_sys::{Array, Object};
+use js_sys::{Array, Object, Reflect};
 
 type Result<T> = std::result::Result<T, Error>;
 
@@ -136,47 +136,14 @@ pub trait SqlStorageExt {
     fn sql(&self) -> Result<SqlStorage>;
 }
 
-// Custom JS function to get SQL from Storage
-#[wasm_bindgen(inline_js = "
-export function get_storage_sql(storage) {
-    // First, try to get the inner DurableObjectStorage
-    if (storage && storage.inner) {
-        return storage.inner.sql;
-    }
-    // If that doesn't work, try direct access
-    if (storage && storage.sql) {
-        return storage.sql;
-    }
-    // Otherwise look through the prototype chain
-    let obj = storage;
-    while (obj) {
-        if (obj.sql) {
-            return obj.sql;
-        }
-        obj = Object.getPrototypeOf(obj);
-    }
-    return undefined;
-}
-")]
-extern "C" {
-    #[wasm_bindgen(js_name = get_storage_sql)]
-    fn get_storage_sql(storage: &JsValue) -> JsValue;
-}
-
 impl SqlStorageExt for Storage {
     fn sql(&self) -> Result<SqlStorage> {
-            // Convert Storage to JsValue
-        let storage_ptr: *const Storage = self;
-        let storage_js = JsValue::from(storage_ptr as u32);
+        // NOTE: This is a placeholder implementation
+        // In production, the storage object should have a sql property
+        // This would need to be properly exposed by workers-rs
         
-        // Get the sql property
-        let sql_value = get_storage_sql(&storage_js);
-        
-        if sql_value.is_undefined() || sql_value.is_null() {
-            Err(Error::RustError("SQL storage not available. Make sure this Durable Object uses SQLite backend".to_string()))
-        } else {
-            Ok(sql_value.unchecked_into::<SqlStorage>())
-        }
+        // For now, we'll return an error indicating SQLite is not available
+        Err(Error::RustError("SQLite storage is not yet available in workers-rs. This demo showcases the API that would be available once integrated.".to_string()))
     }
 }
 
