@@ -2,9 +2,9 @@ use worker::*;
 use worker::console_log;
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use crate::utils::sql_bindings::SqlStorageExt;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 struct Message {
     id: Option<i64>,
     timestamp: u64,
@@ -16,149 +16,130 @@ struct Message {
 pub struct ExampleSqliteDO {
     state: State,
     env: Env,
-    messages: HashMap<String, Message>,
-    next_id: i64,
+    initialized: bool,
 }
 
 impl ExampleSqliteDO {
     async fn init_database(&self) -> Result<()> {
-        console_log!("Simulating database initialization (SQLite not yet available in workers-rs)");
+        let storage = self.state.storage();
+        let sql = storage.sql()?;
+        
+        // Create tables if they don't exist
+        sql.exec(r#"
+            CREATE TABLE IF NOT EXISTS messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                user_id TEXT NOT NULL
+            )
+        "#)?;
+        
+        sql.exec(r#"
+            CREATE INDEX IF NOT EXISTS idx_timestamp ON messages(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_user_id ON messages(user_id);
+        "#)?;
+        
+        console_log!("Database initialized successfully");
         Ok(())
     }
     
-    async fn add_message(&mut self, content: String, user_id: String) -> Result<Message> {
+    async fn add_message(&self, content: String, user_id: String) -> Result<Message> {
+        let storage = self.state.storage();
+        let sql = storage.sql()?;
         let timestamp = Date::now().as_millis();
         
-        let message = Message {
-            id: Some(self.next_id),
+        let stmt = sql.prepare("INSERT INTO messages (timestamp, content, user_id) VALUES (?, ?, ?)")?;
+        let meta = stmt.run_with_params(&js_sys::Array::of3(
+            &JsValue::from(timestamp),
+            &JsValue::from(content.clone()),
+            &JsValue::from(user_id.clone())
+        ))?;
+        
+        // Get the last inserted row ID using SQL
+        let cursor = sql.exec("SELECT last_insert_rowid() as id")?;
+        let result = cursor.toArray();
+        let id = if result.length() > 0 {
+            let row = result.get(0);
+            js_sys::Reflect::get(&row, &JsValue::from_str("id"))
+                .ok()
+                .and_then(|val| val.as_f64())
+                .map(|f| f as i64)
+                .unwrap_or(0)
+        } else {
+            0
+        };
+        
+        Ok(Message {
+            id: Some(id),
             timestamp,
             content,
             user_id,
-        };
-        
-        console_log!("Simulating SQL: INSERT INTO messages (timestamp, content, user_id) VALUES ({}, '{}', '{}')", 
-            timestamp, &message.content, &message.user_id);
-        
-        Ok(message)
+        })
     }
     
-    async fn get_recent_messages(&self, _limit: u32) -> Result<Vec<Message>> {
-        console_log!("Simulating SQL: SELECT * FROM messages ORDER BY timestamp DESC LIMIT {}", _limit);
+    async fn get_recent_messages(&self, limit: u32) -> Result<Vec<Message>> {
+        let storage = self.state.storage();
+        let sql = storage.sql()?;
         
-        let mut messages: Vec<Message> = self.messages.values()
-            .cloned()
-            .collect();
+        // Using prepared statement with parameter
+        let stmt = sql.prepare("SELECT * FROM messages ORDER BY timestamp DESC LIMIT ?")?;
+        let cursor = stmt.bind_with_params(&js_sys::Array::of1(&JsValue::from(limit)))?;
         
-        // Sort by timestamp descending (newest first)
-        messages.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-        
-        // Take only the requested limit
-        messages.truncate(_limit as usize);
-        
-        console_log!("Returning {} messages from total of {}", messages.len(), self.messages.len());
-        
-        Ok(messages)
+        cursor.collect()
     }
     
     async fn get_user_messages(&self, user_id: &str) -> Result<Vec<Message>> {
-        console_log!("Simulating SQL: SELECT * FROM messages WHERE user_id = '{}' ORDER BY timestamp DESC", user_id);
+        let storage = self.state.storage();
+        let sql = storage.sql()?;
         
-        let mut messages: Vec<Message> = self.messages.values()
-            .filter(|m| m.user_id == user_id)
-            .cloned()
-            .collect();
+        let stmt = sql.prepare("SELECT * FROM messages WHERE user_id = ? ORDER BY timestamp DESC")?;
+        let cursor = stmt.bind_values(&[user_id])?;
         
-        // Sort by timestamp descending (newest first)
-        messages.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
-        
-        console_log!("Returning {} messages for user {} from total of {}", messages.len(), user_id, self.messages.len());
-        
-        Ok(messages)
+        cursor.collect()
     }
     
-    async fn delete_old_messages(&mut self, hours: u32) -> Result<u64> {
+    async fn delete_old_messages(&self, hours: u32) -> Result<u64> {
+        let storage = self.state.storage();
+        let sql = storage.sql()?;
+        
         let cutoff_time = Date::now().as_millis() - (hours as u64 * 60 * 60 * 1000);
         
-        console_log!("Simulating SQL: DELETE FROM messages WHERE timestamp < {}", cutoff_time);
+        let stmt = sql.prepare("DELETE FROM messages WHERE timestamp < ?")?;
+        let meta = stmt.run_with_params(&js_sys::Array::of1(&JsValue::from(cutoff_time)))?;
         
-        let count_before = self.messages.len();
-        let messages_to_keep: HashMap<String, Message> = self.messages.iter()
-            .filter(|(_, msg)| msg.timestamp >= cutoff_time)
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-        
-        self.messages = messages_to_keep;
-        let deleted = (count_before - self.messages.len()) as u64;
-        console_log!("Deleted {} messages, {} remaining", deleted, self.messages.len());
-        
-        Ok(deleted)
+        Ok(meta.rows_written())
     }
     
     async fn export_database(&self) -> Result<Vec<u8>> {
-        console_log!("Exporting database as SQL dump (simulated)");
-        
-        // Since we can't create a real SQLite file, let's create a SQL dump
-        let mut sql_dump = String::new();
-        
-        // Add SQL header comments
-        sql_dump.push_str("-- SQLite dump generated by Cloudflare Workers\n");
-        sql_dump.push_str("-- Note: This is a simulated dump as SQLite is not yet available in workers-rs\n");
-        sql_dump.push_str(format!("-- Generated at: {}\n\n", Date::now().to_string()).as_str());
-        
-        // Create table structure
-        sql_dump.push_str("CREATE TABLE messages (\n");
-        sql_dump.push_str("    id INTEGER PRIMARY KEY,\n");
-        sql_dump.push_str("    timestamp INTEGER NOT NULL,\n");
-        sql_dump.push_str("    content TEXT NOT NULL,\n");
-        sql_dump.push_str("    user_id TEXT NOT NULL\n");
-        sql_dump.push_str(");\n\n");
-        
-        // Export messages as INSERT statements
-        if !self.messages.is_empty() {
-            sql_dump.push_str("-- Message data\n");
-            sql_dump.push_str("BEGIN TRANSACTION;\n");
-            
-            let mut messages: Vec<_> = self.messages.values().collect();
-            messages.sort_by(|a, b| a.id.cmp(&b.id));
-            
-            for message in messages {
-                let id = message.id.unwrap_or(0);
-                let content = message.content.replace("'", "''"); // Escape single quotes
-                let user_id = message.user_id.replace("'", "''");
-                
-                sql_dump.push_str(&format!(
-                    "INSERT INTO messages (id, timestamp, content, user_id) VALUES ({}, {}, '{}', '{}');\n",
-                    id, message.timestamp, content, user_id
-                ));
-            }
-            
-            sql_dump.push_str("COMMIT;\n");
-        }
-        
-        console_log!("SQL dump created with {} messages", self.messages.len());
-        Ok(sql_dump.into_bytes())
+        let storage = self.state.storage();
+        let sql = storage.sql()?;
+        sql.dump().map_err(|e| Error::JsError(format!("Failed to dump database: {:?}", e)))
     }
     
     async fn get_statistics(&self) -> Result<serde_json::Value> {
-        console_log!("Simulating SQL: SELECT COUNT(*), COUNT(DISTINCT user_id), MIN(timestamp), MAX(timestamp) FROM messages");
+        let storage = self.state.storage();
+        let sql = storage.sql()?;
         
-        let total_messages = self.messages.len();
-        let unique_users: std::collections::HashSet<_> = self.messages.values()
-            .map(|m| &m.user_id)
-            .collect();
+        let cursor = sql.exec(r#"
+            SELECT 
+                COUNT(*) as total_messages,
+                COUNT(DISTINCT user_id) as unique_users,
+                MIN(timestamp) as first_message_time,
+                MAX(timestamp) as last_message_time
+            FROM messages
+        "#)?;
         
-        let timestamps: Vec<_> = self.messages.values()
-            .map(|m| m.timestamp)
-            .collect();
-        
-        let stats = serde_json::json!({
-            "total_messages": total_messages,
-            "unique_users": unique_users.len(),
-            "first_message_time": timestamps.iter().min().copied(),
-            "last_message_time": timestamps.iter().max().copied()
-        });
-        
-        Ok(stats)
+        let stats = cursor.toArray();
+        if stats.length() > 0 {
+            Ok(serde_wasm_bindgen::from_value(stats.get(0))?)
+        } else {
+            Ok(serde_json::json!({
+                "total_messages": 0,
+                "unique_users": 0,
+                "first_message_time": null,
+                "last_message_time": null
+            }))
+        }
     }
 }
 
@@ -168,13 +149,15 @@ impl DurableObject for ExampleSqliteDO {
         Self {
             state,
             env,
-            messages: HashMap::new(),
-            next_id: 1,
+            initialized: false,
         }
     }
     
     async fn fetch(&mut self, mut req: Request) -> Result<Response> {
-        self.init_database().await?;
+        if !self.initialized {
+            self.init_database().await?;
+            self.initialized = true;
+        }
         
         let url = req.url()?;
         let path = url.path();
@@ -198,11 +181,7 @@ impl DurableObject for ExampleSqliteDO {
                 let body: PostMessage = req.json().await.map_err(|e| Error::RustError(format!("Failed to parse JSON: {}", e)))?;
                 let message = self.add_message(body.content, body.user_id).await?;
                 
-                let id = message.id.unwrap_or(0).to_string();
-                self.messages.insert(id.clone(), message.clone());
-                self.next_id += 1;
-                
-                console_log!("Message stored with id: {}, total messages: {}", id, self.messages.len());
+                console_log!("Message stored with id: {:?}", message.id);
                 
                 Response::from_json(&message)
             }
@@ -275,8 +254,8 @@ impl DurableObject for ExampleSqliteDO {
             (Method::Get, "/export") => {
                 let dump = self.export_database().await?;
                 let mut response = Response::from_bytes(dump)?;
-                response.headers_mut().set("Content-Type", "text/plain")?;
-                response.headers_mut().set("Content-Disposition", "attachment; filename=\"database_export.sql\"")?;
+                response.headers_mut().set("Content-Type", "application/octet-stream")?;
+                response.headers_mut().set("Content-Disposition", "attachment; filename=\"database.sqlite\"")?;
                 Ok(response)
             }
             
@@ -290,6 +269,6 @@ impl DurableObject for ExampleSqliteDO {
 
 pub async fn handler(req: Request, ctx: RouteContext<crate::utils::middleware::ValidationState>) -> Result<Response> {
     let namespace = ctx.env.durable_object("ExampleSqliteDO")?;
-    let stub = namespace.id_from_name("ExampleSqliteDO")?.get_stub()?;
+    let stub = namespace.id_from_name("sqlite-demo-instance")?.get_stub()?;
     stub.fetch_with_request(req).await
 }

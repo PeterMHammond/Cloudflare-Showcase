@@ -1,4 +1,4 @@
-use worker::{Error, Storage, wasm_bindgen, js_sys};
+use worker::{Error, wasm_bindgen, js_sys};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 use js_sys::{Array, Object, Reflect};
@@ -136,14 +136,12 @@ pub trait SqlStorageExt {
     fn sql(&self) -> Result<SqlStorage>;
 }
 
-impl SqlStorageExt for Storage {
+// Since Storage wraps DurableObjectStorage, we need to access the inner field
+impl SqlStorageExt for worker::Storage {
     fn sql(&self) -> Result<SqlStorage> {
-        // NOTE: This is a placeholder implementation
-        // In production, the storage object should have a sql property
-        // This would need to be properly exposed by workers-rs
-        
-        // For now, we'll return an error indicating SQLite is not available
-        Err(Error::RustError("SQLite storage is not yet available in workers-rs. This demo showcases the API that would be available once integrated.".to_string()))
+        // Worker-rs doesn't yet expose the sql property on DurableObjectStorage
+        // This is a placeholder that returns an error until workers-rs is updated
+        Err(Error::RustError("SQLite storage is not yet exposed in workers-rs. Please use JavaScript/TypeScript for SQLite in Durable Objects for now.".to_string()))
     }
 }
 
