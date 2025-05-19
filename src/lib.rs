@@ -15,6 +15,7 @@ use routes::{
     version::handler as version,
     sqlite::handler as sqlite,
     sqlite::api_handler as sqlite_api,
+    sqlite_test::handle as sqlite_test,
 };
 use serde::Serialize;
 
@@ -79,10 +80,12 @@ async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .post_async("/verify", verify::post_handler)
         .get_async("/version", version)
         .get_async("/sqlite", sqlite)
+        .get_async("/sqlite/test", sqlite_test)
         .get_async("/sqlite/api/messages", sqlite_api)
         .get_async("/sqlite/api/user/:id", sqlite_api)
         .get_async("/sqlite/api/stats", sqlite_api)
         .get_async("/sqlite/api/export", sqlite_api)
+        .get_async("/sqlite/api/sql-test", sqlite_api)
         .post_async("/sqlite/api/message", sqlite_api)
         .delete_async("/sqlite/api/old", sqlite_api)
         .run(req, env)

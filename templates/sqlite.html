@@ -154,6 +154,10 @@ async function loadStats() {
     try {
         logSQL('SELECT', 'Querying database statistics');
         const response = await fetch(`${API_BASE}/stats`);
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(error);
+        }
         const stats = await response.json();
         
         const dbStats = document.getElementById('dbStats');
@@ -250,12 +254,19 @@ async function exportDatabase() {
     try {
         logSQL('DUMP', 'Exporting SQLite database');
         const response = await fetch(`${API_BASE}/export`);
+        
+        if (!response.ok) {
+            const error = await response.text();
+            throw new Error(`Export failed: ${error}`);
+        }
+        
         const blob = await response.blob();
+        logSQL('DUMP', `Export received: ${blob.size} bytes`);
         
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `sqlite-export-${Date.now()}.db`;
+        a.download = `sqlite-export-${Date.now()}.sql`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
@@ -263,7 +274,7 @@ async function exportDatabase() {
         logSQL('DUMP', 'Database exported successfully');
     } catch (error) {
         console.error('Error exporting database:', error);
-        logSQL('ERROR', error.message);
+        logSQL('ERROR', `Export failed: ${error.message}`);
     }
 }
 

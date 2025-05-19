@@ -28,14 +28,20 @@ pub async fn api_handler(req: Request, ctx: RouteContext<ValidationState>) -> Re
     let stub = namespace.id_from_name("sqlite-demo-instance")?.get_stub()?;
     
     console_log!("Forwarding request to DO");
-    let mut response = stub.fetch_with_request(req).await?;
-    let status = response.status_code();
-    
-    console_log!("DO response status: {}", status);
-    if status == 404 {
-        let body: String = response.text().await.unwrap_or_default();
-        console_log!("404 response body: {}", body);
+    match stub.fetch_with_request(req).await {
+        Ok(response) => {
+            let status = response.status_code();
+            console_log!("DO response status: {}", status);
+            Ok(response)
+        },
+        Err(e) => {
+            console_log!("Error forwarding to DO: {:?}", e);
+            Response::from_json(&json!({
+                "error": format!("Internal server error: {}", e)
+            })).map(|mut r| {
+                r.headers_mut().set("Content-Type", "application/json").unwrap();
+                r.with_status(500)
+            })
+        }
     }
-    
-    Ok(response)
 }

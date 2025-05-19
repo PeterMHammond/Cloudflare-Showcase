@@ -1,0 +1,409 @@
+
+ ⛅️ wrangler 4.15.2
+-------------------
+
+[custom build] Running: cargo install -q worker-build && worker-build --release
+[custom build] [INFO]: 🎯  Checking for the Wasm target...
+[custom build] 
+[custom build] [INFO]: 🌀  Compiling to Wasm...
+[custom build] 
+[custom build] warning: field `env` is never read
+[custom build]   --> src/routes/example_sqlite_do.rs:18:5
+[custom build]    |
+[custom build] 16 | pub struct ExampleSqliteDO {
+[custom build]    |            --------------- field in this struct
+[custom build] 17 |     state: State,
+[custom build] 18 |     env: Env,
+[custom build]    |     ^^^
+[custom build]    |
+[custom build]    = note: `#[warn(dead_code)]` on by default
+[custom build] 
+[custom build] warning: `showcase` (lib) generated 1 warning
+[custom build]     Finished `release` profile [optimized] target(s) in 0.05s
+[custom build] 
+[custom build] [INFO]: ⬇️  Installing wasm-bindgen...
+[custom build] 
+[custom build] [INFO]: ✨   Done in 0.81s
+[custom build] [INFO]: 📦   Your wasm pkg is ready to publish at /home/peter/projects/Cloudflare-Showcase/build.
+[custom build] 
+[custom build] 
+[custom build]   shim.mjs  28.2kb
+[custom build] 
+[custom build] ⚡ Done in 5ms
+[custom build] 
+Using vars defined in .dev.vars
+Your Worker and resources are simulated locally via Miniflare. For more information, see: https://developers.cloudflare.com/workers/testing/local-development.
+
+Your Worker has access to the following bindings:
+- Durable Objects:
+  - WebsocketDO: WebsocketDO
+  - StudyDO: StudyDO
+  - SttDO: SttDO
+  - ExampleSqliteDO: ExampleSqliteDO
+- AI:
+  - Name: AI [connected to remote resource]
+- Vars:
+  - OPENAI_API_KEY: "(hidden)"
+  - OPENAI_MODEL_ENDPOINT: "(hidden)"
+  - TURNSTILE_SECRET_KEY: "(hidden)"
+  - TURNSTILE_SITE_KEY: "(hidden)"
+  - COOKIE_KEY: "(hidden)"
+The file templates changed, restarting build...
+[custom build] Running: cargo install -q worker-build && worker-build --release
+[wrangler:inf] Ready on http://localhost:8787
+[custom build] [INFO]: 🎯  Checking for the Wasm target...
+[custom build] 
+[custom build] [INFO]: 🌀  Compiling to Wasm...
+[custom build] 
+[custom build] warning: field `env` is never read
+[custom build]   --> src/routes/example_sqlite_do.rs:18:5
+[custom build]    |
+[custom build] 16 | pub struct ExampleSqliteDO {
+[custom build]    |            --------------- field in this struct
+[custom build] 17 |     state: State,
+[custom build] 18 |     env: Env,
+[custom build]    |     ^^^
+[custom build]    |
+[custom build]    = note: `#[warn(dead_code)]` on by default
+[custom build] 
+[custom build] warning: `showcase` (lib) generated 1 warning
+[custom build]     Finished `release` profile [optimized] target(s) in 0.05s
+[custom build] 
+[custom build] [INFO]: ⬇️  Installing wasm-bindgen...
+[custom build] 
+[custom build] [INFO]: ✨   Done in 0.82s
+[custom build] [INFO]: 📦   Your wasm pkg is ready to publish at /home/peter/projects/Cloudflare-Showcase/build.
+[custom build] 
+[custom build] 
+[custom build]   shim.mjs  28.2kb
+[custom build] 
+[custom build] ⚡ Done in 6ms
+[custom build] 
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mUsing Workers AI always accesses your Cloudflare account in order to run AI models, and so will incur usage charges even in local development.[0m
+
+
+⎔ Starting local server...
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (37ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+Checking SQL access...
+SQL object obtained successfully
+Messages table created/verified
+Indexes created/verified
+Database initialized successfully
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 2 messages
+DO response status: 200
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+[wrangler:inf] GET /sqlite/api/messages 200 OK (11ms)
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":2,"unique_users":2,"first_message_time":1747684486557,"last_message_time":1747684494566}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/stats 200 OK (15ms)
+[wrangler:inf] GET /favicon.ico 304 Not Modified (4ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/export
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/export
+Stripped path: '/sqlite/api/export' -> '/export'
+Attempting to match: method=Get, api_path='/export'
+Exporting database as SQL dump
+Found 3 schema objects
+Exporting 2 messages
+Database export successful, size: 598 bytes
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/export 200 OK (5ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite 200 OK (5ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (5ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+Checking SQL access...
+SQL object obtained successfully
+Messages table created/verified
+Indexes created/verified
+Database initialized successfully
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 2 messages
+DO response status: 200
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":2,"unique_users":2,"first_message_time":1747684486557,"last_message_time":1747684494566}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (17ms)
+[wrangler:inf] GET /sqlite/api/stats 200 OK (17ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: POST /sqlite/api/message
+Forwarding request to DO
+SQLite DO received request: POST /sqlite/api/message
+Stripped path: '/sqlite/api/message' -> '/message'
+Attempting to match: method=Post, api_path='/message'
+Adding message: 123 from user: test123
+Executing query: INSERT INTO messages (timestamp, content, user_id) VALUES (1747685084141, '123', 'test123') RETURNING id
+Insert results: Array { obj: Object { obj: JsValue([Object({"id":3})]) } }
+Message stored with id: Some(3)
+DO response status: 200
+[wrangler:inf] POST /sqlite/api/message 200 OK (13ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 3 messages
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (7ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":3,"unique_users":3,"first_message_time":1747684486557,"last_message_time":1747685084141}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/stats 200 OK (12ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 3 messages
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (22ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (5ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (2ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (3ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (3ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (5ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+Checking SQL access...
+SQL object obtained successfully
+Messages table created/verified
+Indexes created/verified
+Database initialized successfully
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 3 messages
+DO response status: 200
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":3,"unique_users":3,"first_message_time":1747684486557,"last_message_time":1747685084141}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (15ms)
+[wrangler:inf] GET /sqlite/api/stats 200 OK (15ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (4ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (4ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+Checking SQL access...
+SQL object obtained successfully
+Messages table created/verified
+Indexes created/verified
+Database initialized successfully
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 3 messages
+DO response status: 200
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":3,"unique_users":3,"first_message_time":1747684486557,"last_message_time":1747685084141}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (15ms)
+[wrangler:inf] GET /sqlite/api/stats 200 OK (15ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (4ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 3 messages
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (8ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":3,"unique_users":3,"first_message_time":1747684486557,"last_message_time":1747685084141}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/stats 200 OK (12ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (2ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (3ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (3ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (5ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (3ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (3ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (2ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (4ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+Checking SQL access...
+SQL object obtained successfully
+Messages table created/verified
+Indexes created/verified
+Database initialized successfully
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 3 messages
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (9ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":3,"unique_users":3,"first_message_time":1747684486557,"last_message_time":1747685084141}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/stats 200 OK (8ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: POST /sqlite/api/message
+Forwarding request to DO
+SQLite DO received request: POST /sqlite/api/message
+Stripped path: '/sqlite/api/message' -> '/message'
+Attempting to match: method=Post, api_path='/message'
+Adding message: 4 from user: test34
+Executing query: INSERT INTO messages (timestamp, content, user_id) VALUES (1747685659590, '4', 'test34') RETURNING id
+Insert results: Array { obj: Object { obj: JsValue([Object({"id":4})]) } }
+Message stored with id: Some(4)
+DO response status: 200
+[wrangler:inf] POST /sqlite/api/message 200 OK (16ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 4 messages
+DO response status: 200
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":4,"unique_users":4,"first_message_time":1747684486557,"last_message_time":1747685659590}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (6ms)
+[wrangler:inf] GET /sqlite/api/stats 200 OK (10ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: DELETE /sqlite/api/old
+Forwarding request to DO
+SQLite DO received request: DELETE /sqlite/api/old
+Stripped path: '/sqlite/api/old' -> '/old'
+Attempting to match: method=Delete, api_path='/old'
+Processing DELETE /old request
+Query string: 'hours=24'
+Parsed query params: {"hours": "24"}
+Deleting messages older than 24 hours
+Deleted 0 messages
+DO response status: 200
+[wrangler:inf] DELETE /sqlite/api/old 200 OK (7ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 4 messages
+DO response status: 200
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":4,"unique_users":4,"first_message_time":1747684486557,"last_message_time":1747685659590}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (6ms)
+[wrangler:inf] GET /sqlite/api/stats 200 OK (12ms)
+Validation state: Cookie header not found
+[wrangler:inf] GET /sqlite/test 200 OK (3ms)
