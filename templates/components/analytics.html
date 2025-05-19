@@ -1,0 +1,100 @@
+<script>
+  // Store session ID from server or create a new one
+  const sessionId = "{{ session_id | default(uuid4()) }}";
+  const pageName = "{{ base.title }}";
+  
+  // Set up auto-tracking for page views and user activity
+  document.addEventListener('DOMContentLoaded', () => {
+    // Track page load time
+    setTimeout(async () => {
+      // Calculate page load time
+      const pageLoadTime = window.performance.timing.domContentLoadedEventEnd - 
+                          window.performance.timing.navigationStart;
+      
+      // Send the page load time to Analytics Engine
+      await sendAnalyticsData('page_load', {
+        load_time_ms: pageLoadTime,
+        page: pageName
+      });
+      
+      console.log(`Analytics: Tracked page load (${pageLoadTime}ms) for ${pageName}`);
+    }, 0);
+
+    // Start tracking time on page
+    let seconds = 0;
+    const timeInterval = setInterval(async () => {
+      seconds++;
+      
+      // Send time on page updates every 30 seconds
+      if (seconds % 30 === 0) {
+        await sendAnalyticsData('time_on_page', {
+          seconds: seconds,
+          page: pageName
+        });
+      }
+    }, 1000);
+
+    // Track user interactions
+    const interactions = {
+      click: 0,
+      scroll: 0,
+      keypress: 0
+    };
+    
+    // Set up throttled event handlers to avoid too many data points
+    let lastInteractionTime = Date.now();
+    
+    ['click', 'scroll', 'keypress'].forEach(eventType => {
+      document.addEventListener(eventType, async () => {
+        // Update interaction counts
+        interactions[eventType]++;
+        
+        // Only send analytics at most once every 5 seconds
+        const now = Date.now();
+        if (now - lastInteractionTime > 5000) {
+          lastInteractionTime = now;
+          await sendAnalyticsData('interaction', {
+            type: eventType,
+            counts: interactions,
+            page: pageName
+          });
+        }
+      });
+    });
+    
+    // Handle page unload to record final analytics
+    window.addEventListener('beforeunload', async () => {
+      // Send final time on page
+      await sendAnalyticsData('time_on_page', {
+        seconds: seconds,
+        page: pageName,
+        final: true
+      });
+      
+      // Clear interval
+      clearInterval(timeInterval);
+    });
+  });
+
+  // Function to send analytics data to Analytics Engine
+  async function sendAnalyticsData(eventType, data) {
+    try {
+      const response = await fetch('/analytics/data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          session_id: sessionId,
+          event_type: eventType,
+          data: data
+        })
+      });
+      
+      return response.ok;
+    } catch (e) {
+      console.error('Analytics error:', e);
+      return false;
+    }
+  }
+</script>

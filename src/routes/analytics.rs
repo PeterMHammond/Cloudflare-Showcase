@@ -52,6 +52,11 @@ async fn record_analytics(env: &Env, point: DataPoint) -> Result<()> {
     Ok(())
 }
 
+// UUID generator function for templates
+pub fn uuid4() -> String {
+    Uuid::new_v4().to_string()
+}
+
 pub async fn handler(req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let base = BaseTemplate::new(&ctx, "Analytics Engine Demo", "Analytics Engine Dashboard").await?;
     
@@ -77,6 +82,7 @@ pub async fn handler(req: Request, ctx: RouteContext<ValidationState>) -> Result
     // Record the analytics (best effort)
     let _ = record_analytics(&ctx.env, data_point).await;
     
+    // Add our context
     let context = json!({
         "base": base,
         "session_id": session_id

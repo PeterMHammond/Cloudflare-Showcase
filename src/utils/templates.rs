@@ -1,6 +1,7 @@
 use minijinja::{Environment, Error as MiniJinjaError};
 use std::collections::HashMap;
 use once_cell::sync::Lazy;
+use uuid;
 
 static TEMPLATES: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     let mut templates = HashMap::new();
@@ -13,6 +14,7 @@ static TEMPLATES: Lazy<HashMap<&'static str, &'static str>> = Lazy::new(|| {
     templates.insert("components/sidebar.html", include_str!("../../templates/components/sidebar.html"));
     templates.insert("components/footer.html", include_str!("../../templates/components/footer.html"));
     templates.insert("components/logging.html", include_str!("../../templates/components/logging.html"));
+    templates.insert("components/analytics.html", include_str!("../../templates/components/analytics.html"));
     
     // Page templates
     templates.insert("index.html", include_str!("../../templates/index.html"));
@@ -42,6 +44,11 @@ pub fn create_environment() -> Result<Environment<'static>, MiniJinjaError> {
     for (name, content) in TEMPLATES.iter() {
         env.add_template(name, content)?;
     }
+    
+    // Add UUID function for analytics
+    env.add_function("uuid4", || {
+        uuid::Uuid::new_v4().to_string()
+    });
     
     Ok(env)
 }
