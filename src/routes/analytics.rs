@@ -5,7 +5,6 @@ use crate::utils::templates::render_template;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use uuid::Uuid;
-use worker::wasm_bindgen::{JsCast, JsValue};
 
 // Data structure for client-side analytics data
 #[derive(Deserialize)]
@@ -39,7 +38,7 @@ async fn record_analytics(env: &Env, point: DataPoint) -> Result<()> {
     match serde_wasm_bindgen::to_value(&point) {
         Ok(js_data) => {
             // Try to access the Analytics Engine binding
-            if let Ok(analytics_binding) = env.var("ANALYTICS") {
+            if let Ok(_analytics_binding) = env.var("ANALYTICS") {
                 // For now, just log that we would record analytics in production
                 console_log!("Analytics data point recorded: {:?}", js_data);
             }
@@ -144,6 +143,27 @@ pub async fn data_handler(mut req: Request, ctx: RouteContext<ValidationState>) 
                     if is_final { "final".to_string() } else { "interval".to_string() },
                 ]),
                 doubles: Some(vec![seconds]),
+                indexes: Some(vec![client_data.session_id]),
+            }
+        },
+        "page_viewed" => {
+            // Extract the scroll percentage from the client data
+            let percentage = client_data.data.get("percentage")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.0);
+            
+            let page = client_data.data.get("page")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            
+            // Create a data point for page view percentage
+            DataPoint {
+                blobs: Some(vec![
+                    "page_viewed".to_string(),
+                    req.url()?.path().to_string(),
+                    page.to_string(),
+                ]),
+                doubles: Some(vec![percentage]),
                 indexes: Some(vec![client_data.session_id]),
             }
         },
