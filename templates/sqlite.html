@@ -59,14 +59,24 @@
                         class="w-full bg-green-500 text-white py-2 px-4 rounded-md hover:bg-green-600 transition-colors">
                     Refresh Stats
                 </button>
-                <button onclick="exportDatabase()" 
-                        class="w-full bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition-colors">
-                    Export SQL Script
-                </button>
-                <button onclick="exportDatabaseFile()" 
-                        class="w-full bg-indigo-500 text-white py-2 px-4 rounded-md hover:bg-indigo-600 transition-colors">
-                    Export DB File
-                </button>
+                <div class="relative">
+                    <button onclick="exportDatabase()" 
+                            class="w-full bg-purple-500 text-white py-2 px-4 rounded-md hover:bg-purple-600 transition-colors">
+                        Export SQL Script
+                    </button>
+                    <div class="text-xs text-gray-600 mt-1">
+                        Standard SQL script - works with any SQLite tool
+                    </div>
+                </div>
+                <div class="relative">
+                    <button onclick="exportDatabaseFile()" 
+                            class="w-full bg-indigo-500 text-white py-2 px-4 rounded-md hover:bg-indigo-600 transition-colors">
+                        Export SQLite DB
+                    </button>
+                    <div class="text-xs text-gray-600 mt-1">
+                        Binary SQLite database file - open directly with SQLite tools
+                    </div>
+                </div>
                 <button onclick="deleteOldMessages()" 
                         class="w-full bg-red-500 text-white py-2 px-4 rounded-md hover:bg-red-600 transition-colors">
                     Delete Messages

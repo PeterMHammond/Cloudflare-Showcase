@@ -265,31 +265,32 @@ impl ExampleSqliteDO {
     async fn export_database_file(&self) -> Result<Vec<u8>> {
         console_log!("Exporting database as SQLite file");
         let storage = self.state.storage();
-        // We don't actually need to use SQL directly here, but we verify it's accessible
-        let _sql = storage.sql()?;
+        let sql = storage.sql()?;
         
-        // Since we can't directly access the raw SQLite database file in Cloudflare Workers,
-        // we'll create a custom format that contains the SQL dump with SQLite headers
-        
-        // First, get our SQL dump
-        let sql_dump = self.export_database().await?;
-        
-        // Our database file header - this is a simplified SQLite file header
-        // This is not a valid SQLite file that can be opened directly by SQLite tools
-        // Instead it's a custom format that contains the SQL dump with minimal SQLite signatures
-        let mut db_file = Vec::with_capacity(sql_dump.len() + 100);
-        
-        // Add SQLite header signature "SQLite format 3"
-        db_file.extend_from_slice(b"SQLite format 3\0");
-        
-        // Add the SQL dump as a comment section
-        db_file.extend_from_slice(b"\n-- BEGIN SQL DUMP\n");
-        db_file.extend_from_slice(&sql_dump);
-        db_file.extend_from_slice(b"\n-- END SQL DUMP\n");
-        
-        console_log!("Created database export file: {} bytes", db_file.len());
-        
-        Ok(db_file)
+        // Use the built-in dump method to get the actual SQLite database file
+        match sql.dump() {
+            Ok(db_file) => {
+                console_log!("Successfully dumped SQLite database, size: {} bytes", db_file.len());
+                Ok(db_file)
+            },
+            Err(e) => {
+                console_log!("Failed to dump SQLite database: {:?}", e);
+                
+                // Fallback to our SQL dump approach if the dump method fails
+                console_log!("Falling back to SQL export with SQLite header");
+                let sql_dump = self.export_database().await?;
+                
+                // Create a file that has the SQLite signature but contains our SQL dump
+                let mut db_file = Vec::with_capacity(sql_dump.len() + 100);
+                db_file.extend_from_slice(b"SQLite format 3\0");
+                db_file.extend_from_slice(b"\n-- BEGIN SQL DUMP\n");
+                db_file.extend_from_slice(&sql_dump);
+                db_file.extend_from_slice(b"\n-- END SQL DUMP\n");
+                
+                console_log!("Created fallback database file: {} bytes", db_file.len());
+                Ok(db_file)
+            }
+        }
     }
     
     async fn get_statistics(&self) -> Result<serde_json::Value> {
