@@ -88,6 +88,7 @@ async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .get_async("/sqlite/api/sql-test", sqlite_api)
         .post_async("/sqlite/api/message", sqlite_api)
         .delete_async("/sqlite/api/old", sqlite_api)
+        .delete_async("/sqlite/api/messages", sqlite_api)
         .run(req, env)
         .await?;
 
