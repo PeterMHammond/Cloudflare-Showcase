@@ -9,6 +9,6 @@ pub mod stt;
 pub mod turnstile;
 pub mod verify;
 pub mod version;
-pub mod example_sqlite_do;
+pub mod sqlite_do;
 pub mod sqlite;
 pub mod sqlite_test; 

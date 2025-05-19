@@ -16,7 +16,7 @@ pub async fn handle(
     let mut test_results = Vec::new();
 
     // Test 1: Access Storage from route context
-    let test_1 = match ctx.env.durable_object("ExampleSqliteDO") {
+    let test_1 = match ctx.env.durable_object("SqliteDO") {
         Ok(namespace) => {
             match namespace.id_from_name("sqlite-demo-instance") {
                 Ok(id) => {

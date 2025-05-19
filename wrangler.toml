@@ -24,8 +24,8 @@ name = "SttDO"
 class_name = "SttDO"
 
 [[durable_objects.bindings]]
-name = "ExampleSqliteDO"
-class_name = "ExampleSqliteDO"
+name = "SqliteDO"
+class_name = "SqliteDO"
 
 [[migrations]]
 tag = "v1"
@@ -41,7 +41,7 @@ new_classes = ["SttDO"]
 
 [[migrations]]
 tag = "v4"
-new_sqlite_classes = ["ExampleSqliteDO"]
+new_sqlite_classes = ["SqliteDO"]
 
 [ai]
 binding = "AI"
