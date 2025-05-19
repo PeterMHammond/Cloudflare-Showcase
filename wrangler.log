@@ -407,3 +407,114 @@ DO response status: 200
 [wrangler:inf] GET /sqlite/api/stats 200 OK (12ms)
 Validation state: Cookie header not found
 [wrangler:inf] GET /sqlite/test 200 OK (3ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (8ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+Checking SQL access...
+SQL object obtained successfully
+Messages table created/verified
+Indexes created/verified
+Database initialized successfully
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 4 messages
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (79ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":4,"unique_users":4,"first_message_time":1747684486557,"last_message_time":1747685659590}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/stats 200 OK (87ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (4ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+Checking SQL access...
+SQL object obtained successfully
+Messages table created/verified
+Indexes created/verified
+Database initialized successfully
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 4 messages
+DO response status: 200
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":4,"unique_users":4,"first_message_time":1747684486557,"last_message_time":1747685659590}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (20ms)
+[wrangler:inf] GET /sqlite/api/stats 200 OK (15ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (6ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 4 messages
+DO response status: 200
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":4,"unique_users":4,"first_message_time":1747684486557,"last_message_time":1747685659590}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/stats 200 OK (14ms)
+[wrangler:inf] GET /sqlite/api/messages 200 OK (12ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+[wrangler:inf] GET /sqlite 200 OK (5ms)
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/messages
+Forwarding request to DO
+Checking SQL access...
+SQL object obtained successfully
+Messages table created/verified
+Indexes created/verified
+Database initialized successfully
+SQLite DO received request: GET /sqlite/api/messages
+Stripped path: '/sqlite/api/messages' -> '/messages'
+Attempting to match: method=Get, api_path='/messages'
+Getting recent messages, limit: 50
+Executing query: SELECT * FROM messages ORDER BY timestamp DESC LIMIT 50
+Found 4 messages
+DO response status: 200
+Validation state: validated:1746058156797:Gu3YXVqS2ICDdV9qKmclwuKNpZZEJknuQ_44XmR1fds=
+SQLite API handler called: GET /sqlite/api/stats
+Forwarding request to DO
+SQLite DO received request: GET /sqlite/api/stats
+Stripped path: '/sqlite/api/stats' -> '/stats'
+Attempting to match: method=Get, api_path='/stats'
+Getting statistics
+Stats query returned 1 rows
+Stats row: JsValue(Object({"total_messages":4,"unique_users":4,"first_message_time":1747684486557,"last_message_time":1747685659590}))
+DO response status: 200
+[wrangler:inf] GET /sqlite/api/messages 200 OK (16ms)
+[wrangler:inf] GET /sqlite/api/stats 200 OK (16ms)
