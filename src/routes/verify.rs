@@ -1,15 +1,10 @@
-use askama::Template;
 use cookie::{Cookie, CookieJar, Key};
 use serde::{Deserialize, Serialize};
 use worker::*;
 use crate::utils::turnstile::validate_turnstile_token;
 use crate::utils::middleware::ValidationState;
-
-#[derive(Template)]
-#[template(path = "verify.html")]
-struct VerifyTemplate {
-    site_key: String,
-}
+use crate::utils::templates::render_template;
+use serde_json::json;
 
 #[derive(Deserialize)]
 struct VerifyRequest {
@@ -26,9 +21,12 @@ struct VerifyResponse {
 
 pub async fn get_handler(_req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let site_key = ctx.env.secret("TURNSTILE_SITE_KEY")?.to_string();
-    let template = VerifyTemplate { site_key };
+    
+    let context = json!({
+        "site_key": site_key
+    });
 
-    match template.render() {
+    match render_template("verify.html", context) {
         Ok(html) => Response::from_html(html),
         Err(err) => Response::error(format!("Failed to render template: {}", err), 500),
     }

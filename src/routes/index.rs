@@ -1,22 +1,18 @@
-use askama::Template;
 use worker::*;
 use crate::BaseTemplate;
 use crate::utils::middleware::ValidationState;
-
-#[derive(Template)]
-#[template(path = "index.html")]
-struct IndexTemplate {
-    #[template(name = "base")]
-    base: BaseTemplate,
-}
+use crate::utils::templates::render_template;
+use serde_json::json;
 
 pub async fn handler(_req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let base = BaseTemplate::new(&ctx, "Home - Cloudflare Showcase", "Welcome").await?;
     
-    let template = IndexTemplate { base };
+    let context = json!({
+        "base": base
+    });
 
-    match template.render() {
+    match render_template("index.html", context) {
         Ok(html) => Response::from_html(html),
         Err(err) => Response::error(format!("Failed to render template: {}", err), 500),
     }
-} 
+}

@@ -1,9 +1,9 @@
-use askama::Template;
 use worker::*;
 use serde_json::json;
 use serde::{Deserialize, Serialize};
 use crate::{utils::turnstile::validate_turnstile_token, BaseTemplate};
 use crate::utils::middleware::ValidationState;
+use crate::utils::templates::render_template;
 
 #[derive(Deserialize)]
 struct ValidateRequest {
@@ -19,19 +19,14 @@ struct ApiResponse {
     debug_info: Option<serde_json::Value>,
 }
 
-#[derive(Template)]
-#[template(path = "turnstile.html")]
-struct TurnstileTemplate {
-    #[template(name = "base")]
-    base: BaseTemplate,
-}
-
 pub async fn get_handler(_req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let base = BaseTemplate::new(&ctx, "Turnstile Test - Cloudflare Showcase", "Turnstile Validation").await?;
     
-    let template = TurnstileTemplate { base };
+    let context = json!({
+        "base": base
+    });
 
-    match template.render() {
+    match render_template("turnstile.html", context) {
         Ok(html) => Response::from_html(html),
         Err(err) => Response::error(format!("Failed to render template: {}", err), 500),
     }

@@ -1,25 +1,24 @@
 use worker::*;
 use worker::console_log;
 use wasm_bindgen::prelude::*;
-use askama::Template;
 use serde::{Deserialize, Serialize};
 use crate::BaseTemplate;
 use crate::utils::middleware::ValidationState;
+use crate::utils::templates::render_template;
+use serde_json::json;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD;
 
-#[derive(Template)]
-#[template(path = "stt.html")]
-struct SttTemplate {
-    base: BaseTemplate,
-}
-
 pub async fn handler(_req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let base = BaseTemplate::new(&ctx, "Speech to Text", "Speech to Text").await?;
-    let template = SttTemplate { base };
-    match template.render() {
+    
+    let context = json!({
+        "base": base
+    });
+    
+    match render_template("stt.html", context) {
         Ok(html) => Response::from_html(html),
-        Err(_err) => Response::error("Template Error", 500),
+        Err(err) => Response::error(format!("Failed to render template: {}", err), 500),
     }
 }
 

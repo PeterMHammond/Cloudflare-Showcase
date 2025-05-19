@@ -1,9 +1,9 @@
-use askama::Template;
 use worker::*;
 use serde_json::{json, Value};
 use serde::{Deserialize, Serialize};
 use crate::BaseTemplate;
 use crate::utils::middleware::ValidationState;
+use crate::utils::templates::render_template;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ClientSecret {
@@ -40,15 +40,6 @@ struct OpenAISessionResponse {
     tools: Vec<Value>,
     turn_detection: TurnDetection,
     voice: String,
-}
-
-#[derive(Template)]
-#[template(path = "openai.html")]
-struct OpenAITemplate {
-    #[template(name = "base")]
-    base: BaseTemplate,
-    token: String,
-    expiry: String,
 }
 
 pub async fn handler(req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
@@ -93,13 +84,13 @@ pub async fn handler(req: Request, ctx: RouteContext<ValidationState>) -> Result
 
     let base = BaseTemplate::new(&ctx, "OpenAI - Cloudflare Showcase", "OpenAI").await?;
     
-    let template = OpenAITemplate {
-        base,
-        token: session.client_secret.value.clone(),
-        expiry: session.client_secret.expires_at.to_string(),
-    };
+    let context = json!({
+        "base": base,
+        "token": session.client_secret.value.clone(),
+        "expiry": session.client_secret.expires_at.to_string(),
+    });
 
-    match template.render() {
+    match render_template("openai.html", context) {
         Ok(html) => {    
             let mut response = Response::from_html(html)?;                        
             response
@@ -109,4 +100,4 @@ pub async fn handler(req: Request, ctx: RouteContext<ValidationState>) -> Result
         },
         Err(err) => Response::error(format!("Failed to render template: {}", err), 500),
     }  
-} 
+}

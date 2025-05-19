@@ -1,6 +1,5 @@
 pub mod about;
 pub mod index;
-pub mod favicon;
 pub mod websocket;
 pub mod websocket_do;
 pub mod study;
@@ -8,4 +7,5 @@ pub mod study_do;
 pub mod openai;
 pub mod stt;
 pub mod turnstile;
-pub mod verify; 
+pub mod verify;
+pub mod version; 

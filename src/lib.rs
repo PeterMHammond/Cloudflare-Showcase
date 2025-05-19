@@ -12,8 +12,11 @@ use routes::{
     stt::do_handler::handler as stt_do,
     turnstile,
     verify,
+    version::handler as version,
 };
+use serde::Serialize;
 
+#[derive(Serialize)]
 pub struct BaseTemplate {
     pub title: String,
     pub page_title: String,
@@ -44,19 +47,9 @@ pub mod utils {
     pub mod scripture;
     pub mod turnstile;
     pub mod middleware;
+    pub mod templates;
 }
-pub mod routes {
-    pub mod about;
-    pub mod index;
-    pub mod websocket;
-    pub mod websocket_do;
-    pub mod study;
-    pub mod study_do;
-    pub mod openai;
-    pub mod stt;
-    pub mod turnstile;
-    pub mod verify;
-}
+pub mod routes;
 
 #[event(fetch)]
 async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
@@ -81,6 +74,7 @@ async fn fetch(req: Request, env: Env, ctx: Context) -> Result<Response> {
         .post_async("/turnstile", turnstile::post_handler)
         .get_async("/verify", verify::get_handler)
         .post_async("/verify", verify::post_handler)
+        .get_async("/version", version)
         .run(req, env)
         .await?;
 

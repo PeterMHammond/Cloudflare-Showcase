@@ -1,21 +1,17 @@
-use askama::Template;
 use worker::*;
 use crate::BaseTemplate;
 use crate::utils::middleware::ValidationState;
-
-#[derive(Template)]
-#[template(path = "websocket.html")]
-struct WebsocketTemplate {
-    #[template(name = "base")]
-    base: BaseTemplate,
-}
+use crate::utils::templates::render_template;
+use serde_json::json;
 
 pub async fn handler(_req: Request, ctx: RouteContext<ValidationState>) -> Result<Response> {
     let base = BaseTemplate::new(&ctx, "WebSocket - Cloudflare Showcase", "WebSocket").await?;
     
-    let template = WebsocketTemplate { base };
+    let context = json!({
+        "base": base
+    });
 
-    match template.render() {
+    match render_template("websocket.html", context) {
         Ok(html) => Response::from_html(html),
         Err(err) => Response::error(format!("Failed to render template: {}", err), 500),
     }
