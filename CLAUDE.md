@@ -81,3 +81,109 @@ Routes follow a consistent pattern:
 - Build configuration in `wrangler.toml`
 - Cargo dependencies in `Cargo.toml`
 - Compatibility date: 2023-12-01
+
+## Workflow Memories
+- Update the version number in the Cargo.toml with each change, but do not worry about adding a note regarding this to the commit description.
+
+## Datastar Implementation Guidelines
+
+### Core Principles
+
+1. **Hypermedia-Driven Architecture**
+   - Use HTML as the primary UI medium (not JSON)
+   - Minimize client-side JavaScript
+   - Leverage server-side rendering with HTML fragments
+   - Use Server-Sent Events (SSE) for real-time updates
+
+2. **Declarative Reactivity**
+   - Use HTML data attributes for state and behavior
+   - Keep data binding in HTML templates
+   - Let the server handle complex data transformations
+   - Focus on minimal, performant UI updates
+
+3. **Worker + Durable Object Structure**
+   - Workers handle HTTP requests and responses
+   - Durable Objects manage state and event streams
+   - SSE communicates state changes to clients
+   - Workers should do the heavy rendering work
+
+### Implementation Pattern
+
+```html
+<!-- Component template with data bindings -->
+<div data-signals='{{ initial_state_json }}'
+     data-on-load="@get('/path/to/sse')">
+    <input type="text" data-bind="message">
+    <button data-on-click="@post('/path/to/endpoint')">Send</button>
+    <div id="target-container">
+        <!-- Content will be updated via SSE -->
+    </div>
+</div>
+```
+
+```rust
+// In SSE event handler
+let mut builder = SseBuilder::new();
+
+// Add HTML fragments with selector targeting
+builder.add_fragments_with_merge_options(
+    rendered_html,
+    MergeMode::Prepend,  // Merge mode determines how content is inserted
+    "#target-container", // CSS selector for target element
+    50,                  // Animation settle duration
+    false                // Use view transition API
+);
+
+// Update client-side signals/state
+builder.add_signals(&json!({
+    "message": "New message",
+    "count": 42
+}))?;
+
+// Return SSE response
+builder.into_response(false) // Keep-alive flag
+```
+
+### Best Practices
+
+1. **Minimize Client-Side State**
+   - Keep most state on the server
+   - Only pass necessary data to the client
+   - Use SSE to keep client state updated
+
+2. **Prefer Server Rendering**
+   - Generate HTML fragments on the server
+   - Keep DOM manipulation logic server-side
+   - Only use client-side updates for immediate feedback
+
+3. **SSE Connection Management**
+   - Use a single SSE connection per client
+   - Implement heartbeats to detect disconnections
+   - Handle reconnection gracefully
+
+4. **HTML-First Design**
+   - Design components as HTML fragments
+   - Use progressive enhancement
+   - Keep semantic HTML as a priority
+
+### Anti-Patterns to Avoid
+
+1. **Don't implement complex client-side JS logic**
+   - Avoid custom JavaScript frameworks
+   - Don't duplicate server-side logic on the client
+   - Let Datastar handle reactivity
+
+2. **Don't misuse Durable Objects**
+   - Don't create a DO per request
+   - Don't store temporary or session data in DOs
+   - Remember DOs have storage limits
+
+3. **Don't over-fragment your HTML**
+   - Keep related UI elements together
+   - Avoid too fine-grained updates
+   - Consider UI coherence in your fragment design
+
+4. **Don't cache excessively**
+   - Be careful with stale data
+   - Design for real-time updates when needed
+   - Balance performance and freshness
