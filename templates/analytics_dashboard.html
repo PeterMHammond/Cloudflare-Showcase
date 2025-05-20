@@ -68,8 +68,13 @@
 
   <!-- Page Performance Table -->
   <div class="bg-white rounded-lg shadow flex-1 overflow-hidden">
-    <div class="border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-      <h2 class="text-lg font-medium text-gray-900">Page-by-Page Performance Metrics</h2>
+    <div class="border-b border-gray-200 px-6 py-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+      <div>
+        <h2 class="text-lg font-medium text-gray-900">Page-by-Page Performance Metrics</h2>
+        <div id="data-source-indicator" class="text-sm text-red-500 font-medium">
+          ⚠️ This is simulated data. No connection to Analytics Engine.
+        </div>
+      </div>
       <div class="relative max-w-xs">
         <input type="text" id="page-search" placeholder="Search pages..." class="block w-full pr-10 pl-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 sm:text-sm">
         <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
@@ -301,7 +306,20 @@
     if (!analyticsData.pages || !Array.isArray(analyticsData.pages) || analyticsData.pages.length === 0) {
       return false;
     }
-    return !analyticsData.pages[0].dataSource || !analyticsData.pages[0].dataSource.includes("Simulation");
+    
+    // Update the data source indicator
+    const indicator = document.getElementById('data-source-indicator');
+    const isReal = !analyticsData.pages[0].dataSource || !analyticsData.pages[0].dataSource.includes("Simulation");
+    
+    if (isReal) {
+      indicator.className = "text-sm text-green-600 font-medium";
+      indicator.innerHTML = "✅ Real data from Analytics Engine";
+    } else {
+      indicator.className = "text-sm text-red-500 font-medium";
+      indicator.innerHTML = "⚠️ This is simulated data. No connection to Analytics Engine.";
+    }
+    
+    return isReal;
   }
   
   // Initialize the dashboard

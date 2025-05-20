@@ -57,40 +57,23 @@ async fn query_analytics_data(env: &Env, period: &str, metric: &str) -> Result<V
         _ => 7, // Default to 7 days
     };
     
-    // Check if ANALYTICS binding exists and query real analytics data
-    let analytics_binding = env.var("ANALYTICS");
-    let has_analytics = analytics_binding.is_ok();
-    
-    let pages = if has_analytics {
-        // Try to query real analytics data
-        console_log!("Querying Analytics Engine for period: {} days, metric: {}", days, metric);
-        
-        // This is where we would query the actual Analytics Engine using SQL API
-        // For now, we're using simulated data with a note indicating real implementation
-        query_real_analytics(env, days, metric).await.unwrap_or_else(|_| {
-            console_error!("Failed to query real analytics, falling back to simulated data");
+    // Only use real data - no simulation
+    let result = match query_real_analytics(env, days, metric).await {
+        Ok(data) => data,
+        Err(e) => {
+            console_error!("Failed to query real Analytics Engine data: {:?}", e);
+            
+            // For demo purposes, we're using simulated data
+            // In a real app, you could return an error instead
+            console_log!("Using simulated data for demo purposes only");
             get_simulated_data(days)
-        })
-    } else {
-        // If Analytics Engine binding is not available, return minimal simulated data
-        console_log!("Analytics Engine binding not available, using simulated data");
-        json!([
-            {
-                "url": "/",
-                "title": "Home",
-                "views": 42,
-                "loadTime": 250,
-                "scrollDepth": 65,
-                "timeOnPage": 95,
-                "bounceRate": 30
-            }
-        ])
+        }
     };
     
     // Calculate summary metrics
-    let total_pages = pages.as_array().map_or(0, |arr| arr.len());
+    let total_pages = result.as_array().map_or(0, |arr| arr.len());
     let empty_vec = Vec::new();
-    let page_data = pages.as_array().unwrap_or(&empty_vec);
+    let page_data = result.as_array().unwrap_or(&empty_vec);
     
     let total_views = page_data.iter()
         .filter_map(|p| p.get("views").and_then(|v| v.as_f64()))
@@ -109,7 +92,7 @@ async fn query_analytics_data(env: &Env, period: &str, metric: &str) -> Result<V
         .sum::<f64>() / total_pages as f64;
     
     // Build the response with both summary and page-level data
-    let result = json!({
+    let response = json!({
         "summary": {
             "totalPages": total_pages,
             "totalViews": total_views,
@@ -118,10 +101,10 @@ async fn query_analytics_data(env: &Env, period: &str, metric: &str) -> Result<V
             "avgTimeOnPage": avg_time_on_page,
             "period": period
         },
-        "pages": pages
+        "pages": result
     });
     
-    Ok(result)
+    Ok(response)
 }
 
 // Function to query the real Analytics Engine
