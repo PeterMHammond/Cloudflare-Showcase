@@ -2,7 +2,7 @@ use worker::*;
 use worker::console_log;
 use wasm_bindgen::prelude::*;
 use serde::{Deserialize, Serialize};
-use crate::utils::sql_bindings::SqlStorageExt;
+use crate::utils::sql_bindings::{SqlStorageExt, Migration};
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Message {
@@ -20,35 +20,38 @@ pub struct SqliteDO {
     initialized: bool,
 }
 
+// Define migrations for the database
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        name: "create_messages_table",
+        sql: include_str!("../sql/create_tables.sql"),
+    },
+    Migration {
+        version: 2,
+        name: "create_indexes",
+        sql: include_str!("../sql/create_indexes.sql"),
+    },
+];
+
 impl SqliteDO {
     async fn init_database(&mut self) -> Result<()> {
         let storage = self.state.storage();
         
-        // First, let's debug what type of object we're getting
-        console_log!("Checking SQL access...");
+        console_log!("Initializing database with migration system...");
         
         match storage.sql() {
             Ok(sql) => {
                 console_log!("SQL object obtained successfully");
                 
-                // Create tables if they don't exist
-                match sql.exec(include_str!("../sql/create_tables.sql")) {
-                    Ok(_) => {
-                        console_log!("Messages table created/verified");
+                // Apply migrations
+                match sql.migrate(MIGRATIONS) {
+                    Ok(()) => {
+                        console_log!("All migrations applied successfully");
                     },
                     Err(e) => {
-                        console_log!("Failed to create messages table: {:?}", e);
-                        return Err(Error::JsError(format!("Failed to create table: {:?}", e)));
-                    }
-                }
-                
-                match sql.exec(include_str!("../sql/create_indexes.sql")) {
-                    Ok(_) => {
-                        console_log!("Indexes created/verified");
-                    },
-                    Err(e) => {
-                        console_log!("Warning: Failed to create indexes: {:?}", e);
-                        // Don't fail if indexes can't be created
+                        console_log!("Failed to apply migrations: {:?}", e);
+                        return Err(e);
                     }
                 }
                 
@@ -70,49 +73,22 @@ impl SqliteDO {
         let sql = storage.sql()?;
         let timestamp = Date::now().as_millis() as i64;
         
-        // Using exec instead of prepare for now
-        let query = format!(
-            "INSERT INTO messages (timestamp, content, user_id) VALUES ({}, '{}', '{}') RETURNING id",
+        // Use the new PreparedStatement API for safer queries
+        let id = sql.prepare("INSERT INTO messages (timestamp, content, user_id) VALUES (?, ?, ?) RETURNING id")
+            .bind_value(timestamp)
+            .bind_value(content.as_str())
+            .bind_value(user_id.as_str())
+            .first::<serde_json::Value>()?
+            .and_then(|row| row.get("id").and_then(|v| v.as_i64()));
+        
+        console_log!("Message inserted with id: {:?}", id);
+        
+        Ok(Message {
+            id,
             timestamp,
-            content.replace("'", "''"), // Escape single quotes
-            user_id.replace("'", "''")
-        );
-        
-        console_log!("Executing query: {}", query);
-        
-        match sql.exec(&query) {
-            Ok(cursor) => {
-                let results = cursor.toArray();
-                console_log!("Insert results: {:?}", results);
-                
-                if results.length() > 0 {
-                    let row = results.get(0);
-                    let id = js_sys::Reflect::get(&row, &JsValue::from_str("id"))
-                        .ok()
-                        .and_then(|val| val.as_f64())
-                        .map(|f| f as i64);
-                    
-                    Ok(Message {
-                        id,
-                        timestamp,
-                        content,
-                        user_id,
-                    })
-                } else {
-                    console_log!("No rows returned from insert");
-                    Ok(Message {
-                        id: None,
-                        timestamp,
-                        content,
-                        user_id,
-                    })
-                }
-            },
-            Err(e) => {
-                console_log!("Failed to insert message: {:?}", e);
-                Err(Error::JsError(format!("Failed to insert: {:?}", e)))
-            }
-        }
+            content,
+            user_id,
+        })
     }
     
     async fn get_recent_messages(&self, limit: u32) -> Result<Vec<Message>> {
@@ -121,128 +97,63 @@ impl SqliteDO {
         let storage = self.state.storage();
         let sql = storage.sql()?;
         
-        let query = include_str!("../sql/get_recent_messages.sql").replace("{}", &limit.to_string());
-        console_log!("Executing query: {}", query);
+        // Use PreparedStatement for parameterized query
+        let messages = sql.prepare("SELECT * FROM messages ORDER BY timestamp DESC LIMIT ?")
+            .bind_value(limit as i32)
+            .all::<Message>()?;
         
-        match sql.exec(&query) {
-            Ok(cursor) => {
-                let results = cursor.toArray();
-                console_log!("Found {} messages", results.length());
-                
-                let mut messages = Vec::new();
-                for i in 0..results.length() {
-                    let row = results.get(i);
-                    
-                    if let Ok(msg) = serde_wasm_bindgen::from_value::<Message>(row) {
-                        messages.push(msg);
-                    } else {
-                        console_log!("Failed to parse message at index {}", i);
-                    }
-                }
-                
-                Ok(messages)
-            },
-            Err(e) => {
-                console_log!("Failed to get messages: {:?}", e);
-                Err(Error::JsError(format!("Failed to query: {:?}", e)))
-            }
-        }
+        console_log!("Found {} messages", messages.len());
+        Ok(messages)
     }
     
     async fn get_user_messages(&self, user_id: &str) -> Result<Vec<Message>> {
         let storage = self.state.storage();
         let sql = storage.sql()?;
         
-        let safe_user_id = user_id.replace("'", "''");
-        let query = include_str!("../sql/get_user_messages.sql").replace("{}", &safe_user_id);
-        
-        match sql.exec(&query) {
-            Ok(cursor) => {
-                cursor.collect()
-            },
-            Err(e) => {
-                Err(Error::JsError(format!("Failed to query user messages: {:?}", e)))
-            }
-        }
+        // Use PreparedStatement for safe parameter binding
+        sql.prepare("SELECT * FROM messages WHERE user_id = ? ORDER BY timestamp DESC")
+            .bind_value(user_id)
+            .all::<Message>()
     }
     
     async fn delete_messages(&self) -> Result<u64> {
         let storage = self.state.storage();
         let sql = storage.sql()?;
         
-        let query = include_str!("../sql/delete_messages.sql");
+        // Use execute method for non-parameterized queries
+        sql.execute("DELETE FROM messages")?;
+        Ok(0) // SQLite DO doesn't provide row count directly
+    }
+    
+    async fn bulk_insert_messages(&self, messages: Vec<(String, String)>) -> Result<usize> {
+        let storage = self.state.storage();
+        let sql = storage.sql()?;
         
-        match sql.exec(query) {
-            Ok(_) => Ok(0), // We need to get row count from metadata
-            Err(e) => Err(Error::JsError(format!("Failed to delete: {:?}", e)))
-        }
+        // Demonstrate transaction usage
+        sql.transaction(|sql| {
+            let mut count = 0;
+            let timestamp = Date::now().as_millis() as i64;
+            
+            for (content, user_id) in messages {
+                sql.prepare("INSERT INTO messages (timestamp, content, user_id) VALUES (?, ?, ?)")
+                    .bind_value(timestamp)
+                    .bind_value(content.as_str())
+                    .bind_value(user_id.as_str())
+                    .run()?;
+                count += 1;
+            }
+            
+            Ok(count)
+        })
     }
     
     async fn export_database(&self) -> Result<Vec<u8>> {
-        console_log!("Exporting database as SQL dump");
+        console_log!("Exporting database as binary dump");
         let storage = self.state.storage();
         let sql = storage.sql()?;
-        let mut sql_dump = String::new();
         
-        // Export schema
-        sql_dump.push_str("-- SQLite database export\n");
-        sql_dump.push_str("-- Generated from Cloudflare Durable Object\n\n");
-        
-        // Get the table schema
-        let schema_query = include_str!("../sql/get_schema.sql");
-        
-        match sql.exec(schema_query) {
-            Ok(cursor) => {
-                let results = cursor.toArray();
-                console_log!("Found {} schema objects", results.length());
-                
-                for i in 0..results.length() {
-                    let row = results.get(i);
-                    if let Ok(sql_text) = js_sys::Reflect::get(&row, &JsValue::from_str("sql")) {
-                        if let Some(sql_str) = sql_text.as_string() {
-                            sql_dump.push_str(&sql_str);
-                            sql_dump.push_str(";\n\n");
-                        }
-                    }
-                }
-            },
-            Err(e) => {
-                console_log!("Failed to get schema: {:?}", e);
-                return Err(Error::JsError(format!("Failed to export schema: {:?}", e)));
-            }
-        }
-        
-        // Export data
-        sql_dump.push_str("-- Message data\n");
-        let data_query = include_str!("../sql/get_all_messages.sql");
-        
-        match sql.exec(data_query) {
-            Ok(cursor) => {
-                let results = cursor.toArray();
-                console_log!("Exporting {} messages", results.length());
-                
-                for i in 0..results.length() {
-                    let row = results.get(i);
-                    if let Ok(msg) = serde_wasm_bindgen::from_value::<Message>(row) {
-                        let insert = format!(
-                            "INSERT INTO messages (id, timestamp, content, user_id) VALUES ({}, {}, '{}', '{}');\n",
-                            msg.id.unwrap_or(0),
-                            msg.timestamp,
-                            msg.content.replace("'", "''"),
-                            msg.user_id.replace("'", "''")
-                        );
-                        sql_dump.push_str(&insert);
-                    }
-                }
-            },
-            Err(e) => {
-                console_log!("Failed to export data: {:?}", e);
-                return Err(Error::JsError(format!("Failed to export data: {:?}", e)));
-            }
-        }
-        
-        console_log!("Database export successful, size: {} bytes", sql_dump.len());
-        Ok(sql_dump.into_bytes())
+        // Use the new dump_db method for a complete binary database dump
+        sql.dump_db()
     }
     
     
@@ -416,6 +327,34 @@ impl DurableObject for SqliteDO {
                 Response::from_json(&serde_json::json!({
                     "deleted": deleted,
                     "message": "All messages deleted successfully"
+                }))
+            }
+            
+            (Method::Post, "/bulk-insert") => {
+                #[derive(Deserialize)]
+                struct BulkInsertRequest {
+                    messages: Vec<MessageInput>,
+                }
+                
+                #[derive(Deserialize)]
+                struct MessageInput {
+                    content: String,
+                    user_id: String,
+                }
+                
+                let body: BulkInsertRequest = req.json().await
+                    .map_err(|e| Error::RustError(format!("Failed to parse JSON: {}", e)))?;
+                
+                let messages: Vec<(String, String)> = body.messages
+                    .into_iter()
+                    .map(|m| (m.content, m.user_id))
+                    .collect();
+                
+                let count = self.bulk_insert_messages(messages).await?;
+                
+                Response::from_json(&serde_json::json!({
+                    "success": true,
+                    "inserted": count
                 }))
             }
             
