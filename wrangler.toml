@@ -29,27 +29,8 @@ class_name = "SqliteDO"
 
 [[migrations]]
 tag = "v1"
-new_classes = ["WebsocketDO"]
-
-[[migrations]]
-tag = "v2"
-new_classes = ["StudyDO"]
-
-[[migrations]]
-tag = "v3"
-new_classes = ["SttDO"]
-
-[[migrations]]
-tag = "v4"
-new_sqlite_classes = ["SqliteDO"]
-
-[[migrations]]
-tag = "v5"
-deleted_classes = ["ExampleSqliteDO"]
-
-[[migrations]]
-tag = "v6"
-new_sqlite_classes = ["SqliteDO"]
+new_classes = ["Websocket", "Study", "Stt"]
+new_sqlite_classes = ["Sqlite"]
 
 [ai]
 binding = "AI"
